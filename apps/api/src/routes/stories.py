@@ -107,14 +107,25 @@ async def generate_story(
     db: AsyncSession = Depends(get_db),
 ):
     """Generate a new story using Claude."""
-    generator = StoryGeneratorService(db, current_user)
-    story = await generator.generate_story(
-        topic=request.topic,
-        include_word_ids=request.include_word_ids,
-        focus_grammar_id=request.focus_grammar_id,
-        difficulty_override=request.difficulty_override,
-    )
-    return story
+    try:
+        generator = StoryGeneratorService(db, current_user)
+        story = await generator.generate_story(
+            topic=request.topic,
+            include_word_ids=request.include_word_ids,
+            focus_grammar_id=request.focus_grammar_id,
+            difficulty_override=request.difficulty_override,
+        )
+        return story
+    except Exception as e:
+        error_msg = str(e)
+        if "credit balance" in error_msg.lower():
+            raise HTTPException(
+                status_code=503,
+                detail="Story generation service temporarily unavailable. Please try again later.",
+            )
+        raise HTTPException(
+            status_code=500, detail=f"Failed to generate story: {error_msg}"
+        )
 
 
 @router.get("/{story_id}", response_model=StoryResponse)
