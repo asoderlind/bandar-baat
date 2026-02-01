@@ -60,15 +60,15 @@ usersRoutes.get("/me/progress", async (c) => {
       .where(
         and(
           eq(userWords.userId, user.id),
-          inArray(userWords.status, ["KNOWN", "MASTERED"])
-        )
+          inArray(userWords.status, ["KNOWN", "MASTERED"]),
+        ),
       );
 
     const wordsLearningResult = await db
       .select({ count: sql<number>`count(*)` })
       .from(userWords)
       .where(
-        and(eq(userWords.userId, user.id), eq(userWords.status, "LEARNING"))
+        and(eq(userWords.userId, user.id), eq(userWords.status, "LEARNING")),
       );
 
     // Count learned grammar
@@ -76,7 +76,10 @@ usersRoutes.get("/me/progress", async (c) => {
       .select({ count: sql<number>`count(*)` })
       .from(userGrammars)
       .where(
-        and(eq(userGrammars.userId, user.id), eq(userGrammars.status, "LEARNED"))
+        and(
+          eq(userGrammars.userId, user.id),
+          eq(userGrammars.status, "LEARNED"),
+        ),
       );
 
     // Count completed stories
@@ -84,7 +87,10 @@ usersRoutes.get("/me/progress", async (c) => {
       .select({ count: sql<number>`count(*)` })
       .from(stories)
       .where(
-        and(eq(stories.userId, user.id), sql`${stories.completedAt} IS NOT NULL`)
+        and(
+          eq(stories.userId, user.id),
+          sql`${stories.completedAt} IS NOT NULL`,
+        ),
       );
 
     // Count exercise attempts
@@ -140,8 +146,8 @@ usersRoutes.get("/me/stats", async (c) => {
       .where(
         and(
           eq(userWords.userId, user.id),
-          inArray(userWords.status, ["KNOWN", "MASTERED"])
-        )
+          inArray(userWords.status, ["KNOWN", "MASTERED"]),
+        ),
       );
 
     // Count reviews due
@@ -152,8 +158,8 @@ usersRoutes.get("/me/stats", async (c) => {
         and(
           eq(userWords.userId, user.id),
           inArray(userWords.status, ["LEARNING", "KNOWN"]),
-          sql`${userWords.nextReviewAt} <= ${now}`
-        )
+          sql`${userWords.nextReviewAt} <= ${now}`,
+        ),
       );
 
     const wordsKnown = Number(wordsKnownResult[0]?.count || 0);

@@ -5,7 +5,12 @@ import { eq, and } from "drizzle-orm";
 import Anthropic from "@anthropic-ai/sdk";
 import { requireAuth, type AuthContext } from "../lib/middleware.js";
 import { db } from "../db/index.js";
-import { exercises, exerciseAttempts, userWords, stories } from "../db/schema.js";
+import {
+  exercises,
+  exerciseAttempts,
+  userWords,
+  stories,
+} from "../db/schema.js";
 
 export const exercisesRoutes = new Hono<{ Variables: AuthContext }>();
 
@@ -146,8 +151,8 @@ Reply with JSON: {"acceptable": true/false, "feedback": "brief explanation"}`,
           .where(
             and(
               eq(userWords.userId, user.id),
-              eq(userWords.wordId, exercise.targetWordId)
-            )
+              eq(userWords.wordId, exercise.targetWordId),
+            ),
           );
 
         if (userWord) {
@@ -157,7 +162,7 @@ Reply with JSON: {"acceptable": true/false, "feedback": "brief explanation"}`,
             : userWord.timesCorrect;
           const newFamiliarity = Math.min(
             1,
-            newTimesCorrect / Math.max(1, newTimesReviewed)
+            newTimesCorrect / Math.max(1, newTimesReviewed),
           );
 
           await db
@@ -184,7 +189,7 @@ Reply with JSON: {"acceptable": true/false, "feedback": "brief explanation"}`,
       const message = error instanceof Error ? error.message : "Unknown error";
       return c.json({ success: false, error: message }, 500);
     }
-  }
+  },
 );
 
 /**

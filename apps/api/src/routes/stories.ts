@@ -1,7 +1,16 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { eq, and, sql, isNull, isNotNull, desc, inArray, notInArray } from "drizzle-orm";
+import {
+  eq,
+  and,
+  sql,
+  isNull,
+  isNotNull,
+  desc,
+  inArray,
+  notInArray,
+} from "drizzle-orm";
 import Anthropic from "@anthropic-ai/sdk";
 import { requireAuth, type AuthContext } from "../lib/middleware.js";
 import { db } from "../db/index.js";
@@ -80,8 +89,8 @@ storiesRoutes.get("/ready", async (c) => {
       .where(
         and(
           eq(userWords.userId, user.id),
-          inArray(userWords.status, ["KNOWN", "MASTERED"])
-        )
+          inArray(userWords.status, ["KNOWN", "MASTERED"]),
+        ),
       );
 
     const wordsKnown = Number(knownWordsResult[0]?.count || 0);
@@ -112,7 +121,7 @@ storiesRoutes.get("/ready", async (c) => {
             .select()
             .from(words)
             .where(
-              and(eq(words.cefrLevel, level), notInArray(words.id, knownIds))
+              and(eq(words.cefrLevel, level), notInArray(words.id, knownIds)),
             )
             .limit(5)
         : db.select().from(words).where(eq(words.cefrLevel, level)).limit(5);
@@ -162,8 +171,8 @@ storiesRoutes.post(
           .where(
             and(
               eq(userWords.userId, user.id),
-              inArray(userWords.status, ["KNOWN", "MASTERED"])
-            )
+              inArray(userWords.status, ["KNOWN", "MASTERED"]),
+            ),
           );
         const wordsKnown = Number(knownWordsResult[0]?.count || 0);
 
@@ -181,8 +190,8 @@ storiesRoutes.post(
         .where(
           and(
             eq(userWords.userId, user.id),
-            inArray(userWords.status, ["KNOWN", "MASTERED", "LEARNING"])
-          )
+            inArray(userWords.status, ["KNOWN", "MASTERED", "LEARNING"]),
+          ),
         )
         .limit(300);
 
@@ -196,7 +205,10 @@ storiesRoutes.post(
               .select()
               .from(words)
               .where(
-                and(eq(words.cefrLevel, level), notInArray(words.id, knownWordIds))
+                and(
+                  eq(words.cefrLevel, level),
+                  notInArray(words.id, knownWordIds),
+                ),
               )
               .limit(5)
           : db.select().from(words).where(eq(words.cefrLevel, level)).limit(5);
@@ -207,12 +219,15 @@ storiesRoutes.post(
       const grammarResults = await db
         .select({ grammar: grammarConcepts })
         .from(userGrammars)
-        .innerJoin(grammarConcepts, eq(userGrammars.grammarConceptId, grammarConcepts.id))
+        .innerJoin(
+          grammarConcepts,
+          eq(userGrammars.grammarConceptId, grammarConcepts.id),
+        )
         .where(
           and(
             eq(userGrammars.userId, user.id),
-            inArray(userGrammars.status, ["LEARNING", "AVAILABLE"])
-          )
+            inArray(userGrammars.status, ["LEARNING", "AVAILABLE"]),
+          ),
         )
         .orderBy(grammarConcepts.sortOrder)
         .limit(2);
@@ -370,7 +385,8 @@ Generate 4-6 exercises mixing comprehension and vocabulary practice.`;
           storyId: story.id,
           type: exerciseData.type as ExerciseType,
           questionJson: exerciseData.question,
-          correctAnswer: exerciseData.correctAnswer || exerciseData.correct_answer,
+          correctAnswer:
+            exerciseData.correctAnswer || exerciseData.correct_answer,
           options: exerciseData.options,
         });
       }
@@ -419,13 +435,13 @@ Generate 4-6 exercises mixing comprehension and vocabulary practice.`;
             success: false,
             error: "Story generation service temporarily unavailable",
           },
-          503
+          503,
         );
       }
 
       return c.json({ success: false, error: message }, 500);
     }
-  }
+  },
 );
 
 /**
@@ -526,7 +542,9 @@ storiesRoutes.post(
           const [existing] = await db
             .select()
             .from(userWords)
-            .where(and(eq(userWords.userId, user.id), eq(userWords.wordId, wordId)));
+            .where(
+              and(eq(userWords.userId, user.id), eq(userWords.wordId, wordId)),
+            );
 
           if (existing) {
             await db
@@ -534,7 +552,8 @@ storiesRoutes.post(
               .set({
                 timesSeen: existing.timesSeen + 1,
                 lastSeenAt: new Date(),
-                status: existing.status === "NEW" ? "LEARNING" : existing.status,
+                status:
+                  existing.status === "NEW" ? "LEARNING" : existing.status,
               })
               .where(eq(userWords.id, existing.id));
           } else {
@@ -555,5 +574,5 @@ storiesRoutes.post(
       const message = error instanceof Error ? error.message : "Unknown error";
       return c.json({ success: false, error: message }, 500);
     }
-  }
+  },
 );

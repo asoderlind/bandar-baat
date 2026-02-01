@@ -34,8 +34,8 @@ reviewsRoutes.get("/due", async (c) => {
         and(
           eq(userWords.userId, user.id),
           inArray(userWords.status, ["LEARNING", "KNOWN"]),
-          lte(userWords.nextReviewAt, now)
-        )
+          lte(userWords.nextReviewAt, now),
+        ),
       )
       .limit(limit);
 
@@ -76,8 +76,8 @@ reviewsRoutes.get("/count", async (c) => {
         and(
           eq(userWords.userId, user.id),
           inArray(userWords.status, ["LEARNING", "KNOWN"]),
-          lte(userWords.nextReviewAt, now)
-        )
+          lte(userWords.nextReviewAt, now),
+        ),
       );
 
     return c.json({
@@ -112,17 +112,22 @@ reviewsRoutes.post(
       const [userWord] = await db
         .select()
         .from(userWords)
-        .where(and(eq(userWords.userId, user.id), eq(userWords.wordId, wordId)));
+        .where(
+          and(eq(userWords.userId, user.id), eq(userWords.wordId, wordId)),
+        );
 
       if (!userWord) {
-        return c.json({ success: false, error: "Word not found in user's vocabulary" }, 404);
+        return c.json(
+          { success: false, error: "Word not found in user's vocabulary" },
+          404,
+        );
       }
 
       // Calculate new SRS values using shared function
       const { interval, easeFactor } = calculateSrsUpdate(
         quality,
         userWord.srsIntervalDays,
-        userWord.srsEaseFactor
+        userWord.srsEaseFactor,
       );
 
       // Calculate next review date
@@ -173,5 +178,5 @@ reviewsRoutes.post(
       const message = error instanceof Error ? error.message : "Unknown error";
       return c.json({ success: false, error: message }, 500);
     }
-  }
+  },
 );
