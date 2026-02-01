@@ -28,7 +28,7 @@ app.get("/api/health", (c) => {
 });
 
 // Auth routes (handled by better-auth)
-app.on(["POST", "GET"], "/api/auth/**", (c) => {
+app.all("/api/auth/*", (c) => {
   return auth.handler(c.req.raw);
 });
 

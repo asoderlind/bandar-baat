@@ -5,19 +5,12 @@ import {
   words,
   grammarConcepts,
   users,
-  accounts,
   userWords,
   userGrammars,
 } from "./schema.js";
 import { eq } from "drizzle-orm";
-import crypto from "crypto";
 
 const { Pool } = pg;
-
-// Simple password hashing (better-auth handles this normally)
-function hashPassword(password: string): string {
-  return crypto.createHash("sha256").update(password).digest("hex");
-}
 
 const SEED_WORDS = [
   // A1 - Basic Greetings and Essentials
@@ -854,30 +847,34 @@ async function seed() {
     }
     console.log(`✅ Seeded ${SEED_GRAMMAR.length} grammar concepts`);
 
-    // Create demo user
+    // Create demo user via API (so password is hashed correctly)
     console.log("👤 Creating demo user...");
-    const demoUserId = "demo-user-id-12345";
+    
     const [existingUser] = await db
       .select()
       .from(users)
-      .where(eq(users.id, demoUserId));
+      .where(eq(users.email, "demo@example.com"));
+
+    let demoUserId: string;
 
     if (!existingUser) {
-      await db.insert(users).values({
-        id: demoUserId,
-        email: "demo@example.com",
-        name: "Demo User",
-        emailVerified: true,
+      // Call the auth API to create user with proper password hashing
+      const response = await fetch("http://localhost:8000/api/auth/sign-up/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: "demo@example.com",
+          password: "demo1234", // Must be at least 8 characters for better-auth
+          name: "Demo User",
+        }),
       });
 
-      // Create account with password
-      await db.insert(accounts).values({
-        id: crypto.randomUUID(),
-        userId: demoUserId,
-        accountId: demoUserId,
-        providerId: "credential",
-        password: hashPassword("demo123"),
-      });
+      if (!response.ok) {
+        throw new Error(`Failed to create demo user: ${await response.text()}`);
+      }
+
+      const { user } = await response.json();
+      demoUserId = user.id;
 
       // Add some initial known words for demo user
       const allWords = await db.select().from(words).limit(20);
@@ -912,7 +909,7 @@ async function seed() {
         });
       }
 
-      console.log("✅ Created demo user (demo@example.com / demo123)");
+      console.log("✅ Created demo user (demo@example.com / demo1234)");
     } else {
       console.log("ℹ️ Demo user already exists");
     }

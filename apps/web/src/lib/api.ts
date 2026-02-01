@@ -1,31 +1,6 @@
 const API_BASE = "/api";
 
-interface ApiResponse<T> {
-  success: boolean;
-  data?: T;
-  error?: string;
-}
-
 class ApiClient {
-  private token: string | null = null;
-
-  constructor() {
-    this.token = localStorage.getItem("token");
-  }
-
-  setToken(token: string | null) {
-    this.token = token;
-    if (token) {
-      localStorage.setItem("token", token);
-    } else {
-      localStorage.removeItem("token");
-    }
-  }
-
-  getToken() {
-    return this.token;
-  }
-
   private async request<T>(
     endpoint: string,
     options: RequestInit = {},
@@ -35,17 +10,13 @@ class ApiClient {
       ...(options.headers as Record<string, string>),
     };
 
-    if (this.token) {
-      headers["Authorization"] = `Bearer ${this.token}`;
-    }
-
     const response = await fetch(`${API_BASE}${endpoint}`, {
       ...options,
       headers,
+      credentials: "include", // Include cookies for better-auth sessions
     });
 
     if (response.status === 401) {
-      this.setToken(null);
       window.location.href = "/login";
       throw new Error("Unauthorized");
     }
@@ -60,28 +31,37 @@ class ApiClient {
     return response.json();
   }
 
-  // Auth
+  // Auth (using better-auth endpoints)
   async login(email: string, password: string) {
-    const response = await this.request<{ access_token: string }>(
-      "/auth/login",
-      {
-        method: "POST",
-        body: JSON.stringify({ email, password }),
-      },
-    );
-    this.setToken(response.access_token);
+    const response = await this.request<{
+      token: string;
+      user: { id: string; email: string; name: string | null };
+    }>("/auth/sign-in/email", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
     return response;
   }
 
   async register(email: string, password: string, name?: string) {
-    return this.request<{ id: string; email: string }>("/auth/register", {
+    return this.request<{
+      token: string;
+      user: { id: string; email: string; name: string | null };
+    }>("/auth/sign-up/email", {
       method: "POST",
       body: JSON.stringify({ email, password, name }),
     });
   }
 
-  logout() {
-    this.setToken(null);
+  async logout() {
+    await this.request("/auth/sign-out", { method: "POST" });
+  }
+
+  async getSession() {
+    return this.request<{
+      session: { id: string; userId: string } | null;
+      user: { id: string; email: string; name: string | null } | null;
+    }>("/auth/get-session", { method: "GET" });
   }
 
   // User

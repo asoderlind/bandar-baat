@@ -20,7 +20,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name?: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -30,16 +30,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchUser = useCallback(async () => {
-    if (!api.getToken()) {
-      setIsLoading(false);
-      return;
-    }
-
     try {
-      const profile = await api.getProfile();
-      setUser(profile);
+      const session = await api.getSession();
+      if (session.user) {
+        setUser(session.user);
+      } else {
+        setUser(null);
+      }
     } catch {
-      api.logout();
+      setUser(null);
     } finally {
       setIsLoading(false);
     }
@@ -50,18 +49,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [fetchUser]);
 
   const login = async (email: string, password: string) => {
-    await api.login(email, password);
-    await fetchUser();
+    const response = await api.login(email, password);
+    if (response.user) {
+      setUser(response.user);
+    }
   };
 
   const register = async (email: string, password: string, name?: string) => {
-    await api.register(email, password, name);
-    await api.login(email, password);
-    await fetchUser();
+    const response = await api.register(email, password, name);
+    if (response.user) {
+      setUser(response.user);
+    }
   };
 
-  const logout = () => {
-    api.logout();
+  const logout = async () => {
+    await api.logout();
     setUser(null);
   };
 
@@ -87,11 +89,11 @@ export function useAuth() {
     // Return a default when used outside provider (for initial render)
     return {
       user: null,
-      isAuthenticated: !!api.getToken(),
+      isAuthenticated: false,
       isLoading: true,
       login: async () => {},
       register: async () => {},
-      logout: () => {},
+      logout: async () => {},
     };
   }
   return context;
