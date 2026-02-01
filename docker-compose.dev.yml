@@ -17,21 +17,23 @@ services:
 
   api:
     build:
-      context: ./apps/api
-      dockerfile: Dockerfile.dev
+      context: .
+      dockerfile: apps/api/Dockerfile.dev
     ports:
       - "8000:8000"
     volumes:
-      - ./apps/api/src:/app/src
-      - ./.env:/app/.env:ro
+      - ./apps/api/src:/app/apps/api/src
+      - ./apps/api/drizzle:/app/apps/api/drizzle
+      - ./packages/shared:/app/packages/shared
     environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/monke_say
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/monke_say
+      - PORT=8000
     env_file:
       - .env
     depends_on:
       db:
         condition: service_healthy
-    command: uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+    command: pnpm dev
 
   web:
     build:

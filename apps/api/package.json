@@ -1,12 +1,33 @@
 {
   "name": "@monke-say/api",
   "version": "0.0.1",
-  "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "uvicorn src.main:app --reload --host 0.0.0.0 --port 8000",
-    "start": "uvicorn src.main:app --host 0.0.0.0 --port 8000",
-    "db:migrate": "cd src && alembic upgrade head",
-    "db:revision": "cd src && alembic revision --autogenerate -m",
-    "db:seed": "python -m src.db.seed"
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "db:seed": "tsx src/db/seed.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@hono/node-server": "^1.13.7",
+    "@hono/zod-validator": "^0.4.2",
+    "@monke-say/shared": "workspace:*",
+    "better-auth": "^1.1.10",
+    "drizzle-orm": "^0.41.0",
+    "hono": "^4.6.16",
+    "pg": "^8.13.1",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/pg": "^8.11.10",
+    "drizzle-kit": "^0.31.4",
+    "tsx": "^4.19.2",
+    "typescript": "~5.7.2"
   }
 }

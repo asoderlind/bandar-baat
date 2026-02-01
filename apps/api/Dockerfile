@@ -1,22 +1,37 @@
-FROM python:3.11-slim
+FROM node:22-slim AS builder
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
+# Install pnpm
+RUN npm install -g pnpm
 
-# Copy and install Python dependencies
-COPY pyproject.toml .
-RUN pip install --no-cache-dir .
+# Copy workspace package files
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY apps/api/package.json ./apps/api/
+COPY packages/shared/package.json ./packages/shared/
+
+# Install dependencies
+RUN pnpm install --frozen-lockfile --filter @monke-say/api...
 
 # Copy source code
-COPY src/ src/
+COPY apps/api ./apps/api
+COPY packages/shared ./packages/shared
 
-# Expose port
+# Build
+WORKDIR /app/apps/api
+RUN pnpm build
+
+# Production stage
+FROM node:22-slim
+
+WORKDIR /app
+
+RUN npm install -g pnpm
+
+COPY --from=builder /app/apps/api/dist ./dist
+COPY --from=builder /app/apps/api/package.json ./
+COPY --from=builder /app/apps/api/node_modules ./node_modules
+
 EXPOSE 8000
 
-# Run the application
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["node", "dist/index.js"]

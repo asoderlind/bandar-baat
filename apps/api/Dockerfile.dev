@@ -1,22 +1,26 @@
-FROM python:3.11-slim
+FROM node:22-slim
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
+# Install pnpm
+RUN npm install -g pnpm
 
-# Copy and install Python dependencies
-COPY pyproject.toml .
-RUN pip install --no-cache-dir .[dev]
+# Copy workspace package files first
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY apps/api/package.json ./apps/api/
+COPY packages/shared/package.json ./packages/shared/
+
+# Install all workspace dependencies
+RUN pnpm install
 
 # Copy source code
-COPY src/ src/
+COPY apps/api ./apps/api
+COPY packages/shared ./packages/shared
+
+WORKDIR /app/apps/api
 
 # Expose port
 EXPOSE 8000
 
 # Run with hot reload
-CMD ["uvicorn", "src.main:app", "--reload", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["pnpm", "dev"]
