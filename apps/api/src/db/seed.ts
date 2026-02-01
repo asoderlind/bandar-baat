@@ -849,7 +849,7 @@ async function seed() {
 
     // Create demo user via API (so password is hashed correctly)
     console.log("👤 Creating demo user...");
-    
+
     const [existingUser] = await db
       .select()
       .from(users)
@@ -859,15 +859,18 @@ async function seed() {
 
     if (!existingUser) {
       // Call the auth API to create user with proper password hashing
-      const response = await fetch("http://localhost:8000/api/auth/sign-up/email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: "demo@example.com",
-          password: "demo1234", // Must be at least 8 characters for better-auth
-          name: "Demo User",
-        }),
-      });
+      const response = await fetch(
+        "http://localhost:8000/api/auth/sign-up/email",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: "demo@example.com",
+            password: "demo1234", // Must be at least 8 characters for better-auth
+            name: "Demo User",
+          }),
+        },
+      );
 
       if (!response.ok) {
         throw new Error(`Failed to create demo user: ${await response.text()}`);
