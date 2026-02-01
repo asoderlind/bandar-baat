@@ -1,0 +1,24 @@
+{
+  "name": "monke-say",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Hindi Learning Webapp - Comprehensible Input with AI-generated stories",
+  "scripts": {
+    "dev": "pnpm run --parallel dev:web dev:api",
+    "dev:web": "pnpm --filter @monke-say/web dev",
+    "dev:api": "pnpm --filter @monke-say/api dev",
+    "build": "pnpm run --parallel build:web",
+    "build:web": "pnpm --filter @monke-say/web build",
+    "lint": "pnpm run --parallel lint:web",
+    "lint:web": "pnpm --filter @monke-say/web lint",
+    "typecheck": "pnpm --filter @monke-say/web typecheck",
+    "db:migrate": "pnpm --filter @monke-say/api db:migrate",
+    "db:seed": "pnpm --filter @monke-say/api db:seed",
+    "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules"
+  },
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@10.4.1"
+}

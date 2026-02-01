@@ -1,0 +1,51 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: monke_say
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./apps/api/src:/app/src
+      - ./.env:/app/.env:ro
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/monke_say
+    depends_on:
+      db:
+        condition: service_healthy
+    command: uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile.dev
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./apps/web/src:/app/apps/web/src
+      - ./apps/web/index.html:/app/apps/web/index.html
+      - ./apps/web/vite.config.ts:/app/apps/web/vite.config.ts
+      - ./packages/shared/src:/app/packages/shared/src
+    environment:
+      - VITE_API_URL=http://api:8000
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
