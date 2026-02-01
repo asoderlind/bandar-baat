@@ -1335,7 +1335,7 @@ async def seed_database():
             "number": "NOUN",  # Map to noun as fallback
             "phrase": "NOUN",  # Map to noun as fallback
         }
-        
+
         from src.db.models import PartOfSpeech, CEFRLevel
 
         # Add words
@@ -1355,7 +1355,13 @@ async def seed_database():
         logger.info(f"Seeding {len(SEED_GRAMMAR)} grammar concepts...")
         for i, grammar_data in enumerate(SEED_GRAMMAR):
             # Create slug from name
-            slug = grammar_data["name"].lower().replace(" ", "-").replace("(", "").replace(")", "")
+            slug = (
+                grammar_data["name"]
+                .lower()
+                .replace(" ", "-")
+                .replace("(", "")
+                .replace(")", "")
+            )
             slug = "".join(c for c in slug if c.isalnum() or c == "-")
             grammar = GrammarConcept(
                 name=grammar_data["name"],
