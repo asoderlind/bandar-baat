@@ -85,10 +85,10 @@ export function DashboardView() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {reviewSummary?.words_due || 0}
+              {reviewSummary?.wordsDue || 0}
             </div>
             <p className="text-xs text-muted-foreground">
-              {reviewSummary?.words_reviewed_today || 0} reviewed today
+              {reviewSummary?.wordsReviewedToday || 0} reviewed today
             </p>
           </CardContent>
         </Card>
@@ -105,7 +105,7 @@ export function DashboardView() {
             </CardTitle>
             <CardDescription>
               {storyInfo?.ready
-                ? `Ready! ${storyInfo.new_words_available} new words available`
+                ? `Ready! ${storyInfo.newWordsAvailable} new words available`
                 : "Generate a personalized story at your level"}
             </CardDescription>
           </CardHeader>
@@ -113,7 +113,7 @@ export function DashboardView() {
             {storyInfo && (
               <div className="mb-4">
                 <p className="text-sm text-muted-foreground mb-2">
-                  Topic: {storyInfo.suggested_topic}
+                  Topic: {storyInfo.suggestedTopic}
                 </p>
                 <p className="text-sm text-muted-foreground">
                   Difficulty: {storyInfo.level}
@@ -134,22 +134,22 @@ export function DashboardView() {
               Review Due
             </CardTitle>
             <CardDescription>
-              {reviewSummary?.words_due
-                ? `${reviewSummary.words_due} words waiting for review`
+              {reviewSummary?.wordsDue
+                ? `${reviewSummary.wordsDue} words waiting for review`
                 : "All caught up! Come back later."}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {reviewSummary && reviewSummary.words_due > 0 && (
+            {reviewSummary && reviewSummary.wordsDue > 0 && (
               <div className="mb-4">
                 <div className="flex justify-between text-sm mb-1">
                   <span>Today's progress</span>
-                  <span>{reviewSummary.words_reviewed_today} reviewed</span>
+                  <span>{reviewSummary.wordsReviewedToday} reviewed</span>
                 </div>
                 <Progress
                   value={Math.min(
                     100,
-                    (reviewSummary.words_reviewed_today / 20) * 100,
+                    (reviewSummary.wordsReviewedToday / 20) * 100,
                   )}
                 />
               </div>
@@ -158,9 +158,9 @@ export function DashboardView() {
               <Button
                 variant="outline"
                 className="w-full"
-                disabled={!reviewSummary?.words_due}
+                disabled={!reviewSummary?.wordsDue}
               >
-                {reviewSummary?.words_due ? "Start Review →" : "No reviews due"}
+                {reviewSummary?.wordsDue ? "Start Review →" : "No reviews due"}
               </Button>
             </Link>
           </CardContent>

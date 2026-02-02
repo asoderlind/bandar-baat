@@ -19,8 +19,8 @@ export function HistoryView() {
     );
   }
 
-  const completedStories = stories?.filter((s) => s.completed_at) || [];
-  const inProgressStories = stories?.filter((s) => !s.completed_at) || [];
+  const completedStories = stories?.filter((s) => s.completedAt) || [];
+  const inProgressStories = stories?.filter((s) => !s.completedAt) || [];
 
   return (
     <div className="space-y-8">
@@ -77,13 +77,13 @@ function StoryCard({
     id: string;
     title: string;
     topic: string | null;
-    difficulty_level: string;
-    word_count: number;
-    completed_at: string | null;
-    created_at: string;
+    difficultyLevel: string;
+    wordCount: number;
+    completedAt: string | null;
+    createdAt: string;
   };
 }) {
-  const isCompleted = !!story.completed_at;
+  const isCompleted = !!story.completedAt;
 
   return (
     <Link to={`/story/${story.id}`}>
@@ -94,26 +94,25 @@ function StoryCard({
             <span
               className={cn(
                 "text-xs px-2 py-0.5 rounded",
-                story.difficulty_level === "A1" &&
-                  "bg-green-100 text-green-800",
-                story.difficulty_level === "A2" && "bg-blue-100 text-blue-800",
-                story.difficulty_level === "B1" &&
+                story.difficultyLevel === "A1" && "bg-green-100 text-green-800",
+                story.difficultyLevel === "A2" && "bg-blue-100 text-blue-800",
+                story.difficultyLevel === "B1" &&
                   "bg-yellow-100 text-yellow-800",
-                story.difficulty_level === "B2" && "bg-red-100 text-red-800",
+                story.difficultyLevel === "B2" && "bg-red-100 text-red-800",
               )}
             >
-              {story.difficulty_level}
+              {story.difficultyLevel}
             </span>
           </div>
         </CardHeader>
         <CardContent>
           <div className="text-sm text-muted-foreground space-y-1">
             {story.topic && <p>Topic: {story.topic}</p>}
-            <p>{story.word_count} words</p>
+            <p>{story.wordCount} words</p>
             <p>
               {isCompleted
-                ? `Completed ${new Date(story.completed_at!).toLocaleDateString()}`
-                : `Started ${new Date(story.created_at).toLocaleDateString()}`}
+                ? `Completed ${new Date(story.completedAt!).toLocaleDateString()}`
+                : `Started ${new Date(story.createdAt).toLocaleDateString()}`}
             </p>
           </div>
         </CardContent>

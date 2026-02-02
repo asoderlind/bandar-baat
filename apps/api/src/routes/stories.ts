@@ -331,25 +331,41 @@ Generate 4-6 exercises mixing comprehension and vocabulary practice.`;
       try {
         let jsonText = responseText.trim();
 
-        // Extract JSON from code blocks
-        if (jsonText.includes("```json")) {
-          jsonText = jsonText.split("```json")[1].split("```")[0];
-        } else if (jsonText.includes("```")) {
-          jsonText = jsonText.split("```")[1].split("```")[0];
+        // Extract JSON from code blocks (more robust extraction)
+        const jsonMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)```/);
+        if (jsonMatch) {
+          jsonText = jsonMatch[1].trim();
         }
 
-        // Find JSON object
-        const startIdx = jsonText.indexOf("{");
-        const endIdx = jsonText.lastIndexOf("}");
+        // Find the outermost JSON object
+        let braceCount = 0;
+        let startIdx = -1;
+        let endIdx = -1;
+
+        for (let i = 0; i < jsonText.length; i++) {
+          if (jsonText[i] === "{") {
+            if (startIdx === -1) startIdx = i;
+            braceCount++;
+          } else if (jsonText[i] === "}") {
+            braceCount--;
+            if (braceCount === 0 && startIdx !== -1) {
+              endIdx = i;
+              break;
+            }
+          }
+        }
+
         if (startIdx !== -1 && endIdx !== -1) {
           jsonText = jsonText.slice(startIdx, endIdx + 1);
         }
 
         storyData = JSON.parse(jsonText);
-      } catch {
+      } catch (parseError) {
+        console.error("JSON parse error:", parseError);
+        console.error("Raw response:", responseText.substring(0, 500));
         storyData = {
           title: "Generated Story",
-          content_hindi: responseText,
+          content_hindi: "",
           content_romanized: "",
           content_english: "",
           word_count: 0,

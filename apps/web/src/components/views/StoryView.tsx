@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type Story, type StorySentence, type Exercise } from "@/lib/api";
+import { api, type StorySentence } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
 type StoryStep = "preview" | "read" | "exercises" | "complete";
@@ -77,7 +77,7 @@ export function StoryView() {
     }) => api.submitExercise(exerciseId, answer),
     onSuccess: (data) => {
       setExerciseResult({
-        correct: data.is_correct,
+        correct: data.isCorrect,
         feedback: data.feedback || undefined,
       });
     },
@@ -159,7 +159,7 @@ export function StoryView() {
   if (step === "preview") {
     const newWords = story.sentences
       .flatMap((s) => s.words)
-      .filter((w) => w.is_new)
+      .filter((w) => w.isNew)
       .filter((w, i, arr) => arr.findIndex((x) => x.hindi === w.hindi) === i);
 
     return (
@@ -191,9 +191,9 @@ export function StoryView() {
                 </div>
                 <div className="text-right">
                   <div className="font-medium">{word.english}</div>
-                  {word.part_of_speech && (
+                  {word.partOfSpeech && (
                     <div className="text-xs text-muted-foreground">
-                      {word.part_of_speech}
+                      {word.partOfSpeech}
                     </div>
                   )}
                 </div>
@@ -295,7 +295,7 @@ export function StoryView() {
             <Button variant="outline" onClick={() => setStep("read")}>
               Re-read Story
             </Button>
-            <Button onClick={() => completeMutation.mutate()}>
+            <Button onClick={() => completeMutation.mutate(undefined)}>
               Complete Session →
             </Button>
           </div>
@@ -405,7 +405,7 @@ export function StoryView() {
         <h1 className="text-2xl font-bold">Session Complete!</h1>
         <Card>
           <CardContent className="pt-6 space-y-2">
-            <p>Words learned: {story.target_new_word_ids.length}</p>
+            <p>Words learned: {story.targetNewWordIds.length}</p>
             <p>Story: {story.title}</p>
           </CardContent>
         </Card>
@@ -443,7 +443,7 @@ function SentenceDisplay({
         {sentence.words.map((word, i) => (
           <span
             key={i}
-            className={cn(word.is_new ? "word-new" : "word-known")}
+            className={cn(word.isNew ? "word-new" : "word-known")}
             onClick={() => onWordClick(word)}
           >
             {displayMode === "hindi" ? word.hindi : word.romanized}
@@ -456,9 +456,9 @@ function SentenceDisplay({
           {sentence.romanized}
         </p>
       )}
-      {sentence.grammar_notes.length > 0 && (
+      {sentence.grammarNotes.length > 0 && (
         <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-          ℹ️ {sentence.grammar_notes.join(" • ")}
+          ℹ️ {sentence.grammarNotes.join(" • ")}
         </p>
       )}
     </div>

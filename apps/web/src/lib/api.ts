@@ -28,7 +28,22 @@ class ApiClient {
       throw new Error(error.error || error.detail || "Request failed");
     }
 
-    return response.json();
+    const json = await response.json();
+
+    // Handle wrapped API responses (success/data format)
+    if (
+      json &&
+      typeof json === "object" &&
+      "success" in json &&
+      "data" in json
+    ) {
+      if (!json.success) {
+        throw new Error(json.error || "Request failed");
+      }
+      return json.data as T;
+    }
+
+    return json as T;
   }
 
   // Auth (using better-auth endpoints)
@@ -143,15 +158,15 @@ class ApiClient {
     return this.request<{
       ready: boolean;
       level: string;
-      new_words_available: number;
-      suggested_topic: string;
+      newWordsAvailable: number;
+      suggestedTopic: string;
     }>("/stories/ready");
   }
 
   async generateStory(params?: {
     topic?: string;
-    include_word_ids?: string[];
-    focus_grammar_id?: string;
+    includeWordIds?: string[];
+    focusGrammarId?: string;
   }) {
     return this.request<Story>("/stories/generate", {
       method: "POST",
@@ -164,7 +179,7 @@ class ApiClient {
   }
 
   async completeStory(storyId: string, rating?: number) {
-    return this.request<{ success: boolean; completed_at: string }>(
+    return this.request<{ success: boolean; completedAt: string }>(
       `/stories/${storyId}/complete`,
       {
         method: "POST",
@@ -174,20 +189,20 @@ class ApiClient {
   }
 
   async getStoryExercises(storyId: string) {
-    return this.request<Exercise[]>(`/stories/${storyId}/exercises`);
+    return this.request<Exercise[]>(`/exercises/story/${storyId}`);
   }
 
   // Exercises
   async submitExercise(exerciseId: string, answer: string, timeSpent?: number) {
     return this.request<{
-      is_correct: boolean;
-      correct_answer: string;
+      isCorrect: boolean;
+      correctAnswer: string;
       feedback: string | null;
     }>(`/exercises/${exerciseId}/submit`, {
       method: "POST",
       body: JSON.stringify({
-        user_answer: answer,
-        time_spent_seconds: timeSpent,
+        userAnswer: answer,
+        timeSpentSeconds: timeSpent,
       }),
     });
   }
@@ -200,16 +215,16 @@ class ApiClient {
 
   async getReviewSummary() {
     return this.request<{
-      words_due: number;
-      words_reviewed_today: number;
-      next_review_time: string | null;
+      wordsDue: number;
+      wordsReviewedToday: number;
+      nextReviewTime: string | null;
     }>("/reviews/summary");
   }
 
   async submitReview(userWordId: string, quality: number) {
     return this.request<{
-      next_review_at: string;
-      new_interval_days: number;
+      nextReviewAt: string;
+      newIntervalDays: number;
       status: string;
     }>(`/reviews/${userWordId}/submit`, {
       method: "POST",
@@ -224,14 +239,14 @@ interface Word {
   hindi: string;
   romanized: string;
   english: string;
-  part_of_speech: string;
-  cefr_level: string;
+  partOfSpeech: string;
+  cefrLevel: string;
   tags: string[];
   notes: string | null;
-  user_progress?: {
+  userProgress?: {
     status: string;
     familiarity: number;
-    times_seen: number;
+    timesSeen: number;
   };
 }
 
@@ -240,27 +255,27 @@ interface GrammarConcept {
   name: string;
   slug: string;
   description: string;
-  cefr_level: string;
-  sort_order: number;
+  cefrLevel: string;
+  sortOrder: number;
   examples: { hindi: string; romanized: string; english: string }[];
 }
 
 interface UserGrammar {
   id: string;
-  grammar_concept_id: string;
+  grammarConceptId: string;
   status: string;
-  comfort_score: number;
-  grammar_concept: GrammarConcept;
+  comfortScore: number;
+  grammarConcept: GrammarConcept;
 }
 
 interface StoryListItem {
   id: string;
   title: string;
   topic: string | null;
-  difficulty_level: string;
-  word_count: number;
-  completed_at: string | null;
-  created_at: string;
+  difficultyLevel: string;
+  wordCount: number;
+  completedAt: string | null;
+  createdAt: string;
 }
 
 interface StorySentence {
@@ -272,55 +287,56 @@ interface StorySentence {
     hindi: string;
     romanized: string;
     english: string;
-    word_id?: string;
-    is_new: boolean;
-    part_of_speech?: string;
-    grammar_note?: string;
+    wordId?: string;
+    isNew: boolean;
+    partOfSpeech?: string;
+    grammarNote?: string;
   }[];
-  grammar_notes: string[];
+  grammarNotes: string[];
 }
 
 interface Story {
   id: string;
   title: string;
-  content_hindi: string;
-  content_romanized: string;
-  content_english: string;
+  contentHindi: string;
+  contentRomanized: string;
+  contentEnglish: string;
   sentences: StorySentence[];
-  target_new_word_ids: string[];
-  target_grammar_ids: string[];
+  targetNewWordIds: string[];
+  targetGrammarIds: string[];
   topic: string | null;
-  difficulty_level: string;
-  word_count: number;
+  difficultyLevel: string;
+  wordCount: number;
   rating: number | null;
-  created_at: string;
-  completed_at: string | null;
+  createdAt: string;
+  completedAt: string | null;
+  exercises?: Exercise[];
 }
 
 interface Exercise {
   id: string;
-  story_id: string;
+  storyId: string;
   type: string;
   question: {
     prompt: string;
     context?: string;
-    sentence_index?: number;
+    sentenceIndex?: number;
   };
   options: string[] | null;
-  target_word_id: string | null;
-  target_grammar_id: string | null;
+  targetWordId: string | null;
+  targetGrammarId: string | null;
 }
 
 interface ReviewWord {
-  user_word: {
+  userWord: {
     id: string;
-    word_id: string;
+    wordId: string;
     status: string;
     familiarity: number;
-    times_reviewed: number;
+    timesReviewed: number;
     word: Word;
   };
-  example_sentence: StorySentence | null;
+  exampleSentence: StorySentence | null;
 }
 
 export const api = new ApiClient();
