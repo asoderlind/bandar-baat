@@ -188,6 +188,12 @@ class ApiClient {
     );
   }
 
+  async deleteStory(storyId: string) {
+    return this.request<{ success: boolean }>(`/stories/${storyId}`, {
+      method: "DELETE",
+    });
+  }
+
   async getStoryExercises(storyId: string) {
     return this.request<Exercise[]>(`/exercises/story/${storyId}`);
   }

@@ -319,7 +319,7 @@ Generate 4-6 exercises mixing comprehension and vocabulary practice.`;
 
       const message = await anthropic.messages.create({
         model: "claude-sonnet-4-20250514",
-        max_tokens: 4096,
+        max_tokens: 8192,
         messages: [{ role: "user", content: prompt }],
       });
 
@@ -593,3 +593,32 @@ storiesRoutes.post(
     }
   },
 );
+
+/**
+ * DELETE /api/stories/:storyId
+ * Delete a story
+ */
+storiesRoutes.delete("/:storyId", async (c) => {
+  try {
+    const user = c.get("user");
+    const storyId = c.req.param("storyId");
+
+    // Verify user owns the story
+    const [story] = await db
+      .select()
+      .from(stories)
+      .where(and(eq(stories.id, storyId), eq(stories.userId, user.id)));
+
+    if (!story) {
+      return c.json({ success: false, error: "Story not found" }, 404);
+    }
+
+    // Delete story (exercises will cascade)
+    await db.delete(stories).where(eq(stories.id, storyId));
+
+    return c.json({ success: true, message: "Story deleted" });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return c.json({ success: false, error: message }, 500);
+  }
+});
