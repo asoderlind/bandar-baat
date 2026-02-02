@@ -331,11 +331,12 @@ Generate 4-6 exercises mixing comprehension and vocabulary practice.`;
       try {
         let jsonText = responseText.trim();
 
-        // Extract JSON from code blocks (more robust extraction)
-        const jsonMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)```/);
-        if (jsonMatch) {
-          jsonText = jsonMatch[1].trim();
-        }
+        // Remove markdown code blocks more aggressively
+        // Handle ```json or just ``` at start
+        jsonText = jsonText.replace(/^```(?:json)?\s*\n?/i, "");
+        // Handle trailing ```
+        jsonText = jsonText.replace(/\n?```\s*$/i, "");
+        jsonText = jsonText.trim();
 
         // Find the outermost JSON object
         let braceCount = 0;

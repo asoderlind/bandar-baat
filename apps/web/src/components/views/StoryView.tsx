@@ -211,6 +211,9 @@ export function StoryView() {
 
   // Read story step
   if (step === "read") {
+    // Check if story has parsed sentences or needs to use raw content
+    const hasSentences = story.sentences && story.sentences.length > 0;
+
     return (
       <div className="max-w-3xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
@@ -230,14 +233,31 @@ export function StoryView() {
         <Card>
           <CardContent className="pt-6">
             <div className="story-content space-y-6">
-              {story.sentences.map((sentence, i) => (
-                <SentenceDisplay
-                  key={i}
-                  sentence={sentence}
-                  displayMode={displayMode}
-                  onWordClick={setSelectedWord}
-                />
-              ))}
+              {hasSentences ? (
+                story.sentences.map((sentence, i) => (
+                  <SentenceDisplay
+                    key={i}
+                    sentence={sentence}
+                    displayMode={displayMode}
+                    onWordClick={setSelectedWord}
+                  />
+                ))
+              ) : (
+                // Fallback for stories without parsed sentences
+                <div className="text-lg whitespace-pre-wrap">
+                  {displayMode === "hindi" && (
+                    <p className="hindi-text">
+                      {story.contentHindi || "Content not available"}
+                    </p>
+                  )}
+                  {displayMode === "roman" && (
+                    <p>{story.contentRomanized || "Content not available"}</p>
+                  )}
+                  {displayMode === "english" && (
+                    <p>{story.contentEnglish || "Content not available"}</p>
+                  )}
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
