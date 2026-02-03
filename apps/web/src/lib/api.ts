@@ -207,7 +207,7 @@ class ApiClient {
     }>(`/exercises/${exerciseId}/submit`, {
       method: "POST",
       body: JSON.stringify({
-        userAnswer: answer,
+        answer: answer,
         timeSpentSeconds: timeSpent,
       }),
     });

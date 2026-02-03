@@ -26,7 +26,7 @@ export function VocabularyView() {
 
   const groupedByLevel = words?.reduce(
     (acc, word) => {
-      const level = word.cefr_level;
+      const level = word.cefrLevel;
       if (!acc[level]) acc[level] = [];
       acc[level].push(word);
       return acc;
@@ -113,7 +113,7 @@ export function VocabularyView() {
 }
 
 function WordCard({ word }: { word: Word }) {
-  const status = word.user_progress?.status || "NEW";
+  const status = word.userProgress?.status || "NEW";
 
   return (
     <Card className="hover:shadow-md transition-shadow">
@@ -139,7 +139,7 @@ function WordCard({ word }: { word: Word }) {
         </div>
         <div className="mt-2 font-medium">{word.english}</div>
         <div className="mt-1 text-xs text-muted-foreground">
-          {word.part_of_speech}
+          {word.partOfSpeech}
         </div>
         {word.tags.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">

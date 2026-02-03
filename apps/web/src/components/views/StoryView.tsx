@@ -457,26 +457,79 @@ function SentenceDisplay({
     return <p className="text-lg">{sentence.english}</p>;
   }
 
+  // For Hindi and Roman modes, show the full sentence text
+  // with clickable words highlighted inline
+  const fullText =
+    displayMode === "hindi" ? sentence.hindi : sentence.romanized;
+
+  // Create a map of word forms for quick lookup
+  const wordMap = new Map<string, (typeof sentence.words)[0]>();
+  sentence.words.forEach((word) => {
+    const key =
+      displayMode === "hindi" ? word.hindi : word.romanized.toLowerCase();
+    wordMap.set(key, word);
+  });
+
+  // Try to highlight words in the full sentence text
+  const renderHighlightedText = () => {
+    if (!fullText) {
+      // Fallback to word-by-word if no full text
+      return sentence.words.map((word, i) => (
+        <span
+          key={i}
+          className={cn(
+            word.isNew
+              ? "word-new cursor-pointer"
+              : "word-known cursor-pointer",
+          )}
+          onClick={() => onWordClick(word)}
+        >
+          {displayMode === "hindi" ? word.hindi : word.romanized}
+          {i < sentence.words.length - 1 && " "}
+        </span>
+      ));
+    }
+
+    // For full text, show it directly but make words clickable
+    // Split by word boundaries while keeping delimiters
+    const parts = fullText.split(/(\s+|[,।?""\-—]+)/);
+
+    return parts.map((part, i) => {
+      const trimmed = part.trim();
+      const lookupKey =
+        displayMode === "hindi" ? trimmed : trimmed.toLowerCase();
+      const word = wordMap.get(lookupKey);
+
+      if (word) {
+        return (
+          <span
+            key={i}
+            className={cn(
+              word.isNew
+                ? "word-new cursor-pointer"
+                : "word-known cursor-pointer",
+            )}
+            onClick={() => onWordClick(word)}
+          >
+            {part}
+          </span>
+        );
+      }
+      return <span key={i}>{part}</span>;
+    });
+  };
+
   return (
     <div className="sentence">
       <p className={cn("text-lg", displayMode === "hindi" && "hindi-text")}>
-        {sentence.words.map((word, i) => (
-          <span
-            key={i}
-            className={cn(word.isNew ? "word-new" : "word-known")}
-            onClick={() => onWordClick(word)}
-          >
-            {displayMode === "hindi" ? word.hindi : word.romanized}
-            {i < sentence.words.length - 1 && " "}
-          </span>
-        ))}
+        {renderHighlightedText()}
       </p>
-      {displayMode === "hindi" && (
+      {displayMode === "hindi" && sentence.romanized && (
         <p className="text-sm text-muted-foreground mt-1">
           {sentence.romanized}
         </p>
       )}
-      {sentence.grammarNotes.length > 0 && (
+      {sentence.grammarNotes && sentence.grammarNotes.length > 0 && (
         <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
           ℹ️ {sentence.grammarNotes.join(" • ")}
         </p>
