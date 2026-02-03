@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, type StorySentence } from "@/lib/api";
@@ -14,6 +14,7 @@ export function StoryView() {
   const { storyId } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const tooltipRef = useRef<HTMLDivElement>(null);
 
   const [step, setStep] = useState<StoryStep>("preview");
   const [displayMode, setDisplayMode] = useState<"hindi" | "english">("hindi");
@@ -23,6 +24,7 @@ export function StoryView() {
     english: string;
     partOfSpeech?: string;
     isNew?: boolean;
+    position?: { x: number; y: number };
   } | null>(null);
   const [currentExercise, setCurrentExercise] = useState(0);
   const [exerciseAnswer, setExerciseAnswer] = useState("");
@@ -31,6 +33,28 @@ export function StoryView() {
     feedback?: string;
   } | null>(null);
   const [topic, setTopic] = useState("");
+
+  // Close tooltip when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        tooltipRef.current &&
+        !tooltipRef.current.contains(e.target as Node)
+      ) {
+        // Check if clicked on a word (has cursor-pointer class)
+        const target = e.target as HTMLElement;
+        if (!target.closest(".cursor-pointer")) {
+          setSelectedWord(null);
+        }
+      }
+    };
+
+    if (selectedWord) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () =>
+        document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [selectedWord]);
 
   // Fetch existing story or generate new one
   const { data: story, isLoading: storyLoading } = useQuery({
@@ -257,10 +281,24 @@ export function StoryView() {
 
         {/* Word tooltip */}
         {selectedWord && (
-          <Card className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-80 z-50 shadow-lg border-2">
+          <Card
+            ref={tooltipRef}
+            className="fixed z-50 shadow-lg border-2 w-72"
+            style={{
+              left: selectedWord.position
+                ? Math.min(
+                    Math.max(16, selectedWord.position.x - 144),
+                    window.innerWidth - 304,
+                  )
+                : 16,
+              top: selectedWord.position
+                ? Math.min(selectedWord.position.y, window.innerHeight - 180)
+                : 100,
+            }}
+          >
             <CardContent className="p-4">
-              <div className="flex justify-between items-start">
-                <div className="space-y-2">
+              <div className="flex justify-between items-start gap-2">
+                <div className="space-y-1 flex-1">
                   <div className="hindi-text text-2xl font-semibold">
                     {selectedWord.hindi}
                   </div>
@@ -270,20 +308,23 @@ export function StoryView() {
                   <div className="font-medium text-lg">
                     {selectedWord.english}
                   </div>
-                  {selectedWord.partOfSpeech && (
-                    <div className="text-xs text-muted-foreground">
-                      {selectedWord.partOfSpeech}
-                    </div>
-                  )}
-                  {selectedWord.isNew && (
-                    <span className="inline-block text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">
-                      New word
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {selectedWord.partOfSpeech && (
+                      <span className="text-xs text-muted-foreground">
+                        {selectedWord.partOfSpeech}
+                      </span>
+                    )}
+                    {selectedWord.isNew && (
+                      <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">
+                        New word
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <Button
                   variant="ghost"
                   size="sm"
+                  className="shrink-0 -mt-1 -mr-1"
                   onClick={() => setSelectedWord(null)}
                 >
                   ✕
@@ -460,6 +501,7 @@ function StoryProse({
     english: string;
     partOfSpeech?: string;
     isNew?: boolean;
+    position?: { x: number; y: number };
   }) => void;
 }) {
   // Helper to detect if a sentence is dialogue (starts with speaker: or contains quotes)
@@ -499,7 +541,16 @@ function StoryProse({
                 ? "text-primary font-medium underline decoration-dotted underline-offset-4"
                 : "hover:text-primary",
             )}
-            onClick={() => onWordClick(word)}
+            onClick={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              onWordClick({
+                ...word,
+                position: {
+                  x: rect.left + rect.width / 2,
+                  y: rect.bottom + 8,
+                },
+              });
+            }}
           >
             {part}
           </span>
