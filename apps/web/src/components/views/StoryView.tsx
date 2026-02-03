@@ -563,23 +563,56 @@ function StoryProse({
   // Group sentences into paragraphs (dialogue on own lines, narrative grouped)
   const renderContent = () => {
     if (displayMode === "english") {
-      // For English mode, render as prose paragraphs
-      return sentences.map((sentence, i) => {
+      // For English mode, group consecutive narration sentences into paragraphs
+      const elements: React.ReactElement[] = [];
+      let currentParagraph: string[] = [];
+
+      sentences.forEach((sentence, i) => {
         const text = sentence.english;
         const dialogue = isDialogue(text);
 
-        return (
-          <p
-            key={i}
-            className={cn(
-              "text-lg leading-relaxed",
-              dialogue && "pl-4 border-l-2 border-primary/30 my-2",
-            )}
-          >
-            {text}
-          </p>
-        );
+        if (dialogue) {
+          // Flush current paragraph before dialogue
+          if (currentParagraph.length > 0) {
+            elements.push(
+              <p
+                key={`para-${elements.length}`}
+                className="text-lg leading-relaxed mb-4"
+              >
+                {currentParagraph.join(" ")}
+              </p>,
+            );
+            currentParagraph = [];
+          }
+
+          // Render dialogue on its own line
+          elements.push(
+            <p
+              key={i}
+              className="text-lg leading-relaxed pl-4 border-l-2 border-primary/30 my-3"
+            >
+              {text}
+            </p>,
+          );
+        } else {
+          // Accumulate narration sentences
+          currentParagraph.push(text);
+        }
       });
+
+      // Flush remaining paragraph
+      if (currentParagraph.length > 0) {
+        elements.push(
+          <p
+            key={`para-${elements.length}`}
+            className="text-lg leading-relaxed mb-4"
+          >
+            {currentParagraph.join(" ")}
+          </p>,
+        );
+      }
+
+      return elements;
     }
 
     // For Hindi mode, group consecutive narration sentences into paragraphs
