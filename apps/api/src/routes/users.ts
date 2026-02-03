@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { eq, and, sql, inArray } from "drizzle-orm";
+import { eq, and, sql, inArray, gte, or, isNull, lte } from "drizzle-orm";
 import { requireAuth, type AuthContext } from "../lib/middleware.js";
 import { db } from "../db/index.js";
 import {
@@ -11,6 +11,98 @@ import {
 } from "../db/schema.js";
 
 export const usersRoutes = new Hono<{ Variables: AuthContext }>();
+
+/**
+ * Calculate streak based on consecutive days with learning activity
+ */
+async function calculateStreak(userId: string): Promise<number> {
+  // Get distinct dates with activity (story completions, reviews, exercises)
+  // Looking back up to 365 days
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 365);
+
+  // Get dates with story activity
+  const storyDates = await db
+    .selectDistinct({
+      date: sql<string>`DATE(${stories.createdAt})`,
+    })
+    .from(stories)
+    .where(
+      and(eq(stories.userId, userId), gte(stories.createdAt, thirtyDaysAgo)),
+    );
+
+  // Get dates with review/word activity
+  const wordDates = await db
+    .selectDistinct({
+      date: sql<string>`DATE(${userWords.lastSeenAt})`,
+    })
+    .from(userWords)
+    .where(
+      and(
+        eq(userWords.userId, userId),
+        gte(userWords.lastSeenAt, thirtyDaysAgo),
+      ),
+    );
+
+  // Get dates with exercise activity
+  const exerciseDates = await db
+    .selectDistinct({
+      date: sql<string>`DATE(${exerciseAttempts.createdAt})`,
+    })
+    .from(exerciseAttempts)
+    .where(
+      and(
+        eq(exerciseAttempts.userId, userId),
+        gte(exerciseAttempts.createdAt, thirtyDaysAgo),
+      ),
+    );
+
+  // Combine all dates
+  const allDates = new Set<string>();
+  storyDates.forEach((d) => d.date && allDates.add(d.date));
+  wordDates.forEach((d) => d.date && allDates.add(d.date));
+  exerciseDates.forEach((d) => d.date && allDates.add(d.date));
+
+  if (allDates.size === 0) return 0;
+
+  // Sort dates descending
+  const sortedDates = Array.from(allDates).sort(
+    (a, b) => new Date(b).getTime() - new Date(a).getTime(),
+  );
+
+  // Calculate streak from today/yesterday
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayStr = today.toISOString().split("T")[0];
+
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().split("T")[0];
+
+  // Must have activity today or yesterday to have an active streak
+  if (sortedDates[0] !== todayStr && sortedDates[0] !== yesterdayStr) {
+    return 0;
+  }
+
+  // Count consecutive days
+  let streak = 0;
+  let currentDate = new Date(sortedDates[0]);
+
+  for (const dateStr of sortedDates) {
+    const date = new Date(dateStr);
+    const expectedDate = new Date(currentDate);
+
+    if (date.getTime() === expectedDate.getTime()) {
+      streak++;
+      currentDate.setDate(currentDate.getDate() - 1);
+    } else if (date.getTime() < expectedDate.getTime()) {
+      // Gap in dates, streak broken
+      break;
+    }
+  }
+
+  return streak;
+}
 
 // All routes require authentication
 usersRoutes.use("*", requireAuth);
@@ -112,6 +204,9 @@ usersRoutes.get("/me/progress", async (c) => {
     else if (wordsKnown < 400) currentLevel = "B1";
     else currentLevel = "B2";
 
+    // Calculate streak
+    const currentStreak = await calculateStreak(user.id);
+
     return c.json({
       success: true,
       data: {
@@ -119,7 +214,7 @@ usersRoutes.get("/me/progress", async (c) => {
         wordsLearning,
         grammarLearned,
         currentLevel,
-        currentStreak: 0, // TODO: Calculate streak
+        currentStreak,
         totalStoriesCompleted: storiesCompleted,
         totalExercisesCompleted: exercisesCompleted,
       },
@@ -150,7 +245,7 @@ usersRoutes.get("/me/stats", async (c) => {
         ),
       );
 
-    // Count reviews due
+    // Count reviews due (includes words with null nextReviewAt - new words)
     const reviewsDueResult = await db
       .select({ count: sql<number>`count(*)` })
       .from(userWords)
@@ -158,7 +253,7 @@ usersRoutes.get("/me/stats", async (c) => {
         and(
           eq(userWords.userId, user.id),
           inArray(userWords.status, ["LEARNING", "KNOWN"]),
-          sql`${userWords.nextReviewAt} <= ${now}`,
+          or(isNull(userWords.nextReviewAt), lte(userWords.nextReviewAt, now)),
         ),
       );
 
@@ -172,12 +267,15 @@ usersRoutes.get("/me/stats", async (c) => {
     else if (wordsKnown < 400) level = "B1";
     else level = "B2";
 
+    // Calculate streak
+    const streakDays = await calculateStreak(user.id);
+
     return c.json({
       success: true,
       data: {
         wordsKnown,
         level,
-        streakDays: 0, // TODO: Calculate streak
+        streakDays,
         reviewsDue,
       },
     });

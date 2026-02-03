@@ -9,7 +9,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import { BookOpen, RefreshCw, Flame, BookA } from "lucide-react";
 
 export function DashboardView() {
@@ -56,7 +55,7 @@ export function DashboardView() {
             <BookA className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats?.words_known || 0}</div>
+            <div className="text-2xl font-bold">{stats?.wordsKnown || 0}</div>
             <p className="text-xs text-muted-foreground">
               Level: {stats?.level || "A1"}
             </p>
@@ -72,7 +71,7 @@ export function DashboardView() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {stats?.streak_days || 0} days
+              {stats?.streakDays || 0} days
             </div>
             <p className="text-xs text-muted-foreground">Keep it going!</p>
           </CardContent>
@@ -85,11 +84,9 @@ export function DashboardView() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {reviewSummary?.wordsDue || 0}
+              {reviewSummary?.dueCount || 0}
             </div>
-            <p className="text-xs text-muted-foreground">
-              {reviewSummary?.wordsReviewedToday || 0} reviewed today
-            </p>
+            <p className="text-xs text-muted-foreground">Ready for review</p>
           </CardContent>
         </Card>
       </div>
@@ -134,33 +131,19 @@ export function DashboardView() {
               Review Due
             </CardTitle>
             <CardDescription>
-              {reviewSummary?.wordsDue
-                ? `${reviewSummary.wordsDue} words waiting for review`
+              {reviewSummary?.dueCount
+                ? `${reviewSummary.dueCount} words waiting for review`
                 : "All caught up! Come back later."}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {reviewSummary && reviewSummary.wordsDue > 0 && (
-              <div className="mb-4">
-                <div className="flex justify-between text-sm mb-1">
-                  <span>Today's progress</span>
-                  <span>{reviewSummary.wordsReviewedToday} reviewed</span>
-                </div>
-                <Progress
-                  value={Math.min(
-                    100,
-                    (reviewSummary.wordsReviewedToday / 20) * 100,
-                  )}
-                />
-              </div>
-            )}
             <Link to="/review">
               <Button
                 variant="outline"
                 className="w-full"
-                disabled={!reviewSummary?.wordsDue}
+                disabled={!reviewSummary?.dueCount}
               >
-                {reviewSummary?.wordsDue ? "Start Review →" : "No reviews due"}
+                {reviewSummary?.dueCount ? "Start Review →" : "No reviews due"}
               </Button>
             </Link>
           </CardContent>

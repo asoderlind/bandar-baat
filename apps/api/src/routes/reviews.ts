@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { eq, and, lte, sql, inArray } from "drizzle-orm";
+import { eq, and, lte, sql, inArray, or, isNull } from "drizzle-orm";
 import { requireAuth, type AuthContext } from "../lib/middleware.js";
 import { db } from "../db/index.js";
 import { words, userWords } from "../db/schema.js";
@@ -34,7 +34,7 @@ reviewsRoutes.get("/due", async (c) => {
         and(
           eq(userWords.userId, user.id),
           inArray(userWords.status, ["LEARNING", "KNOWN"]),
-          lte(userWords.nextReviewAt, now),
+          or(isNull(userWords.nextReviewAt), lte(userWords.nextReviewAt, now)),
         ),
       )
       .limit(limit);
@@ -76,7 +76,7 @@ reviewsRoutes.get("/count", async (c) => {
         and(
           eq(userWords.userId, user.id),
           inArray(userWords.status, ["LEARNING", "KNOWN"]),
-          lte(userWords.nextReviewAt, now),
+          or(isNull(userWords.nextReviewAt), lte(userWords.nextReviewAt, now)),
         ),
       );
 

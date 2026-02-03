@@ -624,6 +624,8 @@ storiesRoutes.post(
                 lastSeenAt: new Date(),
                 status:
                   existing.status === "NEW" ? "LEARNING" : existing.status,
+                // Set nextReviewAt if not already set
+                nextReviewAt: existing.nextReviewAt || new Date(),
               })
               .where(eq(userWords.id, existing.id));
           } else {
@@ -634,6 +636,7 @@ storiesRoutes.post(
               source: "STORY",
               timesSeen: 1,
               lastSeenAt: new Date(),
+              nextReviewAt: new Date(), // Due immediately for first review
             });
           }
         }

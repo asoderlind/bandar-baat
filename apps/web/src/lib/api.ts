@@ -88,11 +88,11 @@ class ApiClient {
 
   async getStats() {
     return this.request<{
-      words_known: number;
+      wordsKnown: number;
       level: string;
-      streak_days: number;
-      reviews_due: number;
-    }>("/user/stats");
+      streakDays: number;
+      reviewsDue: number;
+    }>("/users/me/stats");
   }
 
   async getProgress() {
@@ -221,10 +221,8 @@ class ApiClient {
 
   async getReviewSummary() {
     return this.request<{
-      wordsDue: number;
-      wordsReviewedToday: number;
-      nextReviewTime: string | null;
-    }>("/reviews/summary");
+      dueCount: number;
+    }>("/reviews/count");
   }
 
   async submitReview(wordId: string, quality: number) {
