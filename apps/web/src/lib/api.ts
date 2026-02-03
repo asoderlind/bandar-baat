@@ -235,6 +235,38 @@ class ApiClient {
       body: JSON.stringify({ wordId, quality }),
     });
   }
+
+  // TTS (Text-to-Speech)
+  async synthesizeHindi(
+    text: string,
+    options?: { slow?: boolean; voice?: string },
+  ) {
+    return this.request<{ cacheKey: string; audioUrl: string }>(
+      "/tts/synthesize",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          text,
+          slow: options?.slow,
+          voice: options?.voice,
+        }),
+      },
+    );
+  }
+
+  async synthesizeBatch(sentences: { text: string; slow?: boolean }[]) {
+    return this.request<{ text: string; cacheKey: string; audioUrl: string }[]>(
+      "/tts/batch",
+      {
+        method: "POST",
+        body: JSON.stringify({ sentences }),
+      },
+    );
+  }
+
+  getAudioUrl(cacheKey: string) {
+    return `${API_BASE}/tts/audio/${cacheKey}`;
+  }
 }
 
 // Types

@@ -25,9 +25,11 @@ services:
       - ./apps/api/src:/app/apps/api/src
       - ./apps/api/drizzle:/app/apps/api/drizzle
       - ./packages/shared:/app/packages/shared
+      - ./service-key.json:/app/service-key.json:ro
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/monke_say
       - PORT=8000
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/service-key.json
     env_file:
       - .env
     depends_on:

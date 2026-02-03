@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, type StorySentence } from "@/lib/api";
@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { Volume2, VolumeX, Loader2 } from "lucide-react";
 
 type StoryStep = "preview" | "read" | "exercises" | "complete";
 
@@ -33,6 +34,56 @@ export function StoryView() {
     feedback?: string;
   } | null>(null);
   const [topic, setTopic] = useState("");
+
+  // Audio playback state
+  const [playingAudio, setPlayingAudio] = useState<string | null>(null);
+  const [loadingAudio, setLoadingAudio] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Play audio for a word or sentence
+  const playAudio = useCallback(
+    async (text: string, slow?: boolean) => {
+      const audioKey = `${text}-${slow ? "slow" : "normal"}`;
+
+      // Stop current audio if playing
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+        if (playingAudio === audioKey) {
+          setPlayingAudio(null);
+          return;
+        }
+      }
+
+      setLoadingAudio(audioKey);
+      try {
+        const result = await api.synthesizeHindi(text, { slow });
+        const audio = new Audio(result.audioUrl);
+        audioRef.current = audio;
+
+        audio.onplay = () => {
+          setLoadingAudio(null);
+          setPlayingAudio(audioKey);
+        };
+        audio.onended = () => {
+          setPlayingAudio(null);
+          audioRef.current = null;
+        };
+        audio.onerror = () => {
+          setLoadingAudio(null);
+          setPlayingAudio(null);
+          audioRef.current = null;
+        };
+
+        await audio.play();
+      } catch (error) {
+        console.error("Failed to play audio:", error);
+        setLoadingAudio(null);
+        setPlayingAudio(null);
+      }
+    },
+    [playingAudio],
+  );
 
   // Close tooltip when clicking outside
   useEffect(() => {
@@ -240,17 +291,37 @@ export function StoryView() {
 
     return (
       <div className="max-w-3xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-4">
           <h1 className="text-2xl font-bold hindi-text">{story.title}</h1>
-          <Tabs
-            value={displayMode}
-            onValueChange={(v) => setDisplayMode(v as typeof displayMode)}
-          >
-            <TabsList>
-              <TabsTrigger value="hindi">देवनागरी</TabsTrigger>
-              <TabsTrigger value="english">English</TabsTrigger>
-            </TabsList>
-          </Tabs>
+          <div className="flex items-center gap-4">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => playAudio(story.contentHindi, false)}
+              disabled={loadingAudio === `${story.contentHindi}-normal`}
+            >
+              {loadingAudio === `${story.contentHindi}-normal` ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : playingAudio === `${story.contentHindi}-normal` ? (
+                <VolumeX className="h-4 w-4" />
+              ) : (
+                <Volume2 className="h-4 w-4" />
+              )}
+              {playingAudio === `${story.contentHindi}-normal`
+                ? "Stop"
+                : "Listen"}
+            </Button>
+            <Tabs
+              value={displayMode}
+              onValueChange={(v) => setDisplayMode(v as typeof displayMode)}
+            >
+              <TabsList>
+                <TabsTrigger value="hindi">देवनागरी</TabsTrigger>
+                <TabsTrigger value="english">English</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
         </div>
 
         <Card>
@@ -299,8 +370,28 @@ export function StoryView() {
             <CardContent className="p-4">
               <div className="flex justify-between items-start gap-2">
                 <div className="space-y-1 flex-1">
-                  <div className="hindi-text text-2xl font-semibold">
-                    {selectedWord.hindi}
+                  <div className="flex items-center gap-2">
+                    <span className="hindi-text text-2xl font-semibold">
+                      {selectedWord.hindi}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 shrink-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        playAudio(selectedWord.hindi);
+                      }}
+                      disabled={loadingAudio === `${selectedWord.hindi}-normal`}
+                    >
+                      {loadingAudio === `${selectedWord.hindi}-normal` ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : playingAudio === `${selectedWord.hindi}-normal` ? (
+                        <VolumeX className="h-4 w-4" />
+                      ) : (
+                        <Volume2 className="h-4 w-4" />
+                      )}
+                    </Button>
                   </div>
                   <div className="text-sm text-muted-foreground italic">
                     {selectedWord.romanized}

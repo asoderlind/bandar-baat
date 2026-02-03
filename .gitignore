@@ -8,6 +8,8 @@ build/
 .next/
 .vite/
 
+service-key.json
+
 # Python
 __pycache__/
 *.py[cod]
