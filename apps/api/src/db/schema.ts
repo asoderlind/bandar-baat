@@ -244,6 +244,83 @@ export const stories = pgTable("stories", {
 });
 
 // ============================================================================
+// Characters - Recurring story characters for continuity
+// ============================================================================
+
+export const characters = pgTable("characters", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: varchar("user_id", { length: 36 })
+    .references(() => users.id, { onDelete: "cascade" })
+    .notNull(),
+  nameHindi: text("name_hindi").notNull(),
+  nameRomanized: text("name_romanized").notNull(),
+  nameEnglish: text("name_english"),
+  age: integer("age"),
+  gender: varchar("gender", { length: 20 }),
+  occupation: text("occupation"),
+  occupationHindi: text("occupation_hindi"),
+  hobbies: text("hobbies").array().default([]),
+  personalityTraits: text("personality_traits").array().default([]),
+  backstory: text("backstory"),
+  imageUrl: text("image_url"),
+  isActive: boolean("is_active").default(true).notNull(),
+  appearanceCount: integer("appearance_count").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// ============================================================================
+// Character Relationships - How characters relate to each other
+// ============================================================================
+
+export const characterRelationships = pgTable(
+  "character_relationships",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    characterId: uuid("character_id")
+      .references(() => characters.id, { onDelete: "cascade" })
+      .notNull(),
+    relatedCharacterId: uuid("related_character_id")
+      .references(() => characters.id, { onDelete: "cascade" })
+      .notNull(),
+    relationshipType: varchar("relationship_type", { length: 50 }).notNull(), // e.g., "friend", "sibling", "coworker", "neighbor"
+    relationshipDescription: text("relationship_description"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("character_relationship_unique_idx").on(
+      table.characterId,
+      table.relatedCharacterId,
+    ),
+  ],
+);
+
+// ============================================================================
+// Story Characters - Junction table linking stories to characters used
+// ============================================================================
+
+export const storyCharacters = pgTable(
+  "story_characters",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    storyId: uuid("story_id")
+      .references(() => stories.id, { onDelete: "cascade" })
+      .notNull(),
+    characterId: uuid("character_id")
+      .references(() => characters.id, { onDelete: "cascade" })
+      .notNull(),
+    roleInStory: text("role_in_story"), // Brief description of their role in this specific story
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("story_character_unique_idx").on(
+      table.storyId,
+      table.characterId,
+    ),
+  ],
+);
+
+// ============================================================================
 // Exercises
 // ============================================================================
 
@@ -312,6 +389,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   stories: many(stories),
   learningSessions: many(learningSessions),
   exerciseAttempts: many(exerciseAttempts),
+  characters: many(characters),
 }));
 
 export const wordsRelations = relations(words, ({ one, many }) => ({
@@ -360,7 +438,52 @@ export const storiesRelations = relations(stories, ({ one, many }) => ({
   }),
   exercises: many(exercises),
   learningSessions: many(learningSessions),
+  storyCharacters: many(storyCharacters),
 }));
+
+export const charactersRelations = relations(characters, ({ one, many }) => ({
+  user: one(users, {
+    fields: [characters.userId],
+    references: [users.id],
+  }),
+  storyCharacters: many(storyCharacters),
+  relationshipsFrom: many(characterRelationships, {
+    relationName: "characterFrom",
+  }),
+  relationshipsTo: many(characterRelationships, {
+    relationName: "characterTo",
+  }),
+}));
+
+export const characterRelationshipsRelations = relations(
+  characterRelationships,
+  ({ one }) => ({
+    character: one(characters, {
+      fields: [characterRelationships.characterId],
+      references: [characters.id],
+      relationName: "characterFrom",
+    }),
+    relatedCharacter: one(characters, {
+      fields: [characterRelationships.relatedCharacterId],
+      references: [characters.id],
+      relationName: "characterTo",
+    }),
+  }),
+);
+
+export const storyCharactersRelations = relations(
+  storyCharacters,
+  ({ one }) => ({
+    story: one(stories, {
+      fields: [storyCharacters.storyId],
+      references: [stories.id],
+    }),
+    character: one(characters, {
+      fields: [storyCharacters.characterId],
+      references: [characters.id],
+    }),
+  }),
+);
 
 export const exercisesRelations = relations(exercises, ({ one, many }) => ({
   story: one(stories, {

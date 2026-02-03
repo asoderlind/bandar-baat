@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type ReviewWord } from "@/lib/api";
+import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 
 export function ReviewView() {
@@ -18,13 +18,8 @@ export function ReviewView() {
   });
 
   const submitMutation = useMutation({
-    mutationFn: ({
-      userWordId,
-      quality,
-    }: {
-      userWordId: string;
-      quality: number;
-    }) => api.submitReview(userWordId, quality),
+    mutationFn: ({ wordId, quality }: { wordId: string; quality: number }) =>
+      api.submitReview(wordId, quality),
     onSuccess: (_, variables) => {
       if (variables.quality >= 3) {
         setCorrectCount((c) => c + 1);
@@ -90,7 +85,6 @@ export function ReviewView() {
   }
 
   const currentReview = reviews[currentIndex];
-  const word = currentReview.user_word.word;
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -111,7 +105,7 @@ export function ReviewView() {
           {!showAnswer ? (
             <>
               <div className="hindi-large text-4xl text-center mb-8">
-                {word.hindi}
+                {currentReview.hindi}
               </div>
               <Button size="lg" onClick={() => setShowAnswer(true)}>
                 Show Answer
@@ -120,26 +114,14 @@ export function ReviewView() {
           ) : (
             <>
               <div className="hindi-large text-4xl text-center mb-2">
-                {word.hindi}
+                {currentReview.hindi}
               </div>
               <div className="text-lg text-muted-foreground mb-2">
-                {word.romanized}
+                {currentReview.romanized}
               </div>
-              <div className="text-2xl font-medium mb-6">{word.english}</div>
-
-              {/* Example sentence if available */}
-              {currentReview.example_sentence && (
-                <Card className="w-full mb-6 bg-accent/50">
-                  <CardContent className="p-4">
-                    <p className="hindi-text text-lg">
-                      {currentReview.example_sentence.hindi}
-                    </p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {currentReview.example_sentence.english}
-                    </p>
-                  </CardContent>
-                </Card>
-              )}
+              <div className="text-2xl font-medium mb-6">
+                {currentReview.english}
+              </div>
 
               {/* Rating buttons (SM-2 quality scale) */}
               <div className="grid grid-cols-4 gap-2 w-full">
@@ -147,7 +129,7 @@ export function ReviewView() {
                   variant="destructive"
                   onClick={() =>
                     submitMutation.mutate({
-                      userWordId: currentReview.user_word.id,
+                      wordId: currentReview.wordId,
                       quality: 0,
                     })
                   }
@@ -160,7 +142,7 @@ export function ReviewView() {
                   variant="outline"
                   onClick={() =>
                     submitMutation.mutate({
-                      userWordId: currentReview.user_word.id,
+                      wordId: currentReview.wordId,
                       quality: 2,
                     })
                   }
@@ -173,7 +155,7 @@ export function ReviewView() {
                   variant="secondary"
                   onClick={() =>
                     submitMutation.mutate({
-                      userWordId: currentReview.user_word.id,
+                      wordId: currentReview.wordId,
                       quality: 4,
                     })
                   }
@@ -185,7 +167,7 @@ export function ReviewView() {
                 <Button
                   onClick={() =>
                     submitMutation.mutate({
-                      userWordId: currentReview.user_word.id,
+                      wordId: currentReview.wordId,
                       quality: 5,
                     })
                   }
@@ -202,10 +184,8 @@ export function ReviewView() {
 
       {/* Stats */}
       <div className="flex justify-between text-sm text-muted-foreground">
-        <span>Times reviewed: {currentReview.user_word.times_reviewed}</span>
-        <span>
-          Familiarity: {Math.round(currentReview.user_word.familiarity * 100)}%
-        </span>
+        <span>Status: {currentReview.status}</span>
+        <span>Familiarity: {Math.round(currentReview.familiarity * 100)}%</span>
       </div>
     </div>
   );

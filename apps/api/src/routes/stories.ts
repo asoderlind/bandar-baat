@@ -13,6 +13,7 @@ import {
 } from "drizzle-orm";
 import Anthropic from "@anthropic-ai/sdk";
 import { requireAuth, type AuthContext } from "../lib/middleware.js";
+import { buildStoryGenerationPrompt } from "../lib/prompts.js";
 import { db } from "../db/index.js";
 import {
   stories,
@@ -21,6 +22,9 @@ import {
   userWords,
   grammarConcepts,
   userGrammars,
+  characters,
+  characterRelationships,
+  storyCharacters,
 } from "../db/schema.js";
 import type { CEFRLevel, StorySentence, ExerciseType } from "@monke-say/shared";
 
@@ -251,66 +255,81 @@ storiesRoutes.post(
 
       const topic = request.topic || "daily life";
 
-      const prompt = `You are a Hindi language teaching assistant. Generate a short story for a language learner at ${level} level.
+      // Get user's recurring characters for story continuity
+      const userCharacters = await db
+        .select({
+          character: characters,
+        })
+        .from(characters)
+        .where(
+          and(eq(characters.userId, user.id), eq(characters.isActive, true)),
+        )
+        .orderBy(desc(characters.appearanceCount))
+        .limit(5);
 
-KNOWN VOCABULARY (the learner can read these):
-${knownVocabStr || "Basic greetings and pronouns"}
+      // Get relationships for these characters
+      const characterIds = userCharacters.map((c) => c.character.id);
+      let relationshipsData: Array<{
+        relationship: typeof characterRelationships.$inferSelect;
+        relatedChar: typeof characters.$inferSelect;
+      }> = [];
 
-NEW WORDS TO INTRODUCE (use each at least twice):
-${newVocabStr}
+      if (characterIds.length > 0) {
+        relationshipsData = await db
+          .select({
+            relationship: characterRelationships,
+            relatedChar: characters,
+          })
+          .from(characterRelationships)
+          .innerJoin(
+            characters,
+            eq(characterRelationships.relatedCharacterId, characters.id),
+          )
+          .where(inArray(characterRelationships.characterId, characterIds));
+      }
 
-GRAMMAR TO PRACTICE:
-${grammarStr}
+      // Build character context string
+      let characterStr = "";
+      if (userCharacters.length > 0) {
+        characterStr = userCharacters
+          .map((c) => {
+            const char = c.character;
+            let desc = `- ${char.nameHindi} (${char.nameRomanized})`;
+            if (char.age) desc += `, ${char.age} years old`;
+            if (char.occupation)
+              desc += `, ${char.occupationHindi || char.occupation}`;
+            if (char.personalityTraits && char.personalityTraits.length > 0) {
+              desc += ` — ${char.personalityTraits.slice(0, 3).join(", ")}`;
+            }
 
-TOPIC: ${topic}
+            // Add relationships
+            const rels = relationshipsData.filter(
+              (r) => r.relationship.characterId === char.id,
+            );
+            if (rels.length > 0) {
+              const relStr = rels
+                .map(
+                  (r) =>
+                    `${r.relationship.relationshipType} of ${r.relatedChar.nameRomanized}`,
+                )
+                .join(", ");
+              desc += ` [${relStr}]`;
+            }
 
-CONSTRAINTS:
-- 8-12 sentences long
-- Use only known vocabulary + new words (proper nouns like names are OK)
-- Every new word must appear at least twice in different sentences
-- Include 1-2 lines of dialogue
-- Keep sentences simple and clear
+            return desc;
+          })
+          .join("\n");
+      }
 
-Return your response as valid JSON with this exact structure:
-{
-  "title": "Story title in Hindi and English",
-  "content_hindi": "Full story in Devanagari",
-  "content_romanized": "Full story romanized",
-  "content_english": "English translation",
-  "word_count": number,
-  "sentences": [
-    {
-      "index": 0,
-      "hindi": "Sentence in Devanagari",
-      "romanized": "Sentence romanized",
-      "english": "English translation",
-      "words": [
-        {
-          "hindi": "word",
-          "romanized": "word",
-          "english": "meaning",
-          "isNew": true/false,
-          "partOfSpeech": "NOUN/VERB/etc"
-        }
-      ],
-      "grammarNotes": ["Optional grammar explanations"]
-    }
-  ],
-  "exercises": [
-    {
-      "type": "COMPREHENSION/FILL_BLANK/TRANSLATE_TO_HINDI/TRANSLATE_TO_ENGLISH/MULTIPLE_CHOICE",
-      "question": {
-        "prompt": "Question text",
-        "context": "Optional context",
-        "sentenceIndex": 0
-      },
-      "correctAnswer": "The correct answer",
-      "options": ["option1", "option2", "option3", "option4"]
-    }
-  ]
-}
-
-Generate 4-6 exercises mixing comprehension and vocabulary practice.`;
+      // Build prompt using the factored-out function
+      const prompt = buildStoryGenerationPrompt({
+        level,
+        topic,
+        knownVocabulary: knownVocabStr,
+        newVocabulary: newVocabStr,
+        grammarConcepts: grammarStr,
+        characters: characterStr || undefined,
+      });
 
       // Call Claude API
       const anthropic = new Anthropic({
@@ -406,6 +425,40 @@ Generate 4-6 exercises mixing comprehension and vocabulary practice.`;
             exerciseData.correctAnswer || exerciseData.correct_answer,
           options: exerciseData.options,
         });
+      }
+
+      // Link characters used in the story and update appearance counts
+      if (
+        storyData.characters_used &&
+        Array.isArray(storyData.characters_used)
+      ) {
+        for (const charUsed of storyData.characters_used) {
+          // Find matching character by name
+          const matchedChar = userCharacters.find(
+            (c) =>
+              c.character.nameRomanized.toLowerCase() ===
+                charUsed.name?.toLowerCase() ||
+              c.character.nameHindi === charUsed.name,
+          );
+
+          if (matchedChar) {
+            // Link character to story
+            await db.insert(storyCharacters).values({
+              storyId: story.id,
+              characterId: matchedChar.character.id,
+              roleInStory: charUsed.role || null,
+            });
+
+            // Update appearance count
+            await db
+              .update(characters)
+              .set({
+                appearanceCount: matchedChar.character.appearanceCount + 1,
+                updatedAt: new Date(),
+              })
+              .where(eq(characters.id, matchedChar.character.id));
+          }
+        }
       }
 
       // Fetch created exercises

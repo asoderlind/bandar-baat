@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, type StorySentence } from "@/lib/api";
@@ -16,13 +16,13 @@ export function StoryView() {
   const queryClient = useQueryClient();
 
   const [step, setStep] = useState<StoryStep>("preview");
-  const [displayMode, setDisplayMode] = useState<"hindi" | "roman" | "english">(
-    "hindi",
-  );
+  const [displayMode, setDisplayMode] = useState<"hindi" | "english">("hindi");
   const [selectedWord, setSelectedWord] = useState<{
     hindi: string;
     romanized: string;
     english: string;
+    partOfSpeech?: string;
+    isNew?: boolean;
   } | null>(null);
   const [currentExercise, setCurrentExercise] = useState(0);
   const [exerciseAnswer, setExerciseAnswer] = useState("");
@@ -224,7 +224,6 @@ export function StoryView() {
           >
             <TabsList>
               <TabsTrigger value="hindi">देवनागरी</TabsTrigger>
-              <TabsTrigger value="roman">Roman</TabsTrigger>
               <TabsTrigger value="english">English</TabsTrigger>
             </TabsList>
           </Tabs>
@@ -232,16 +231,13 @@ export function StoryView() {
 
         <Card>
           <CardContent className="pt-6">
-            <div className="story-content space-y-6">
+            <div className="story-content prose prose-lg dark:prose-invert max-w-none">
               {hasSentences ? (
-                story.sentences.map((sentence, i) => (
-                  <SentenceDisplay
-                    key={i}
-                    sentence={sentence}
-                    displayMode={displayMode}
-                    onWordClick={setSelectedWord}
-                  />
-                ))
+                <StoryProse
+                  sentences={story.sentences}
+                  displayMode={displayMode}
+                  onWordClick={setSelectedWord}
+                />
               ) : (
                 // Fallback for stories without parsed sentences
                 <div className="text-lg whitespace-pre-wrap">
@@ -249,9 +245,6 @@ export function StoryView() {
                     <p className="hindi-text">
                       {story.contentHindi || "Content not available"}
                     </p>
-                  )}
-                  {displayMode === "roman" && (
-                    <p>{story.contentRomanized || "Content not available"}</p>
                   )}
                   {displayMode === "english" && (
                     <p>{story.contentEnglish || "Content not available"}</p>
@@ -264,15 +257,29 @@ export function StoryView() {
 
         {/* Word tooltip */}
         {selectedWord && (
-          <Card className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-80 z-50 shadow-lg">
+          <Card className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-80 z-50 shadow-lg border-2">
             <CardContent className="p-4">
               <div className="flex justify-between items-start">
-                <div>
-                  <div className="hindi-text text-xl">{selectedWord.hindi}</div>
-                  <div className="text-sm text-muted-foreground">
+                <div className="space-y-2">
+                  <div className="hindi-text text-2xl font-semibold">
+                    {selectedWord.hindi}
+                  </div>
+                  <div className="text-sm text-muted-foreground italic">
                     {selectedWord.romanized}
                   </div>
-                  <div className="font-medium mt-1">{selectedWord.english}</div>
+                  <div className="font-medium text-lg">
+                    {selectedWord.english}
+                  </div>
+                  {selectedWord.partOfSpeech && (
+                    <div className="text-xs text-muted-foreground">
+                      {selectedWord.partOfSpeech}
+                    </div>
+                  )}
+                  {selectedWord.isNew && (
+                    <span className="inline-block text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">
+                      New word
+                    </span>
+                  )}
                 </div>
                 <Button
                   variant="ghost"
@@ -440,74 +447,57 @@ export function StoryView() {
   return null;
 }
 
-function SentenceDisplay({
-  sentence,
+function StoryProse({
+  sentences,
   displayMode,
   onWordClick,
 }: {
-  sentence: StorySentence;
-  displayMode: "hindi" | "roman" | "english";
+  sentences: StorySentence[];
+  displayMode: "hindi" | "english";
   onWordClick: (word: {
     hindi: string;
     romanized: string;
     english: string;
+    partOfSpeech?: string;
+    isNew?: boolean;
   }) => void;
 }) {
-  if (displayMode === "english") {
-    return <p className="text-lg">{sentence.english}</p>;
-  }
+  // Helper to detect if a sentence is dialogue (starts with speaker: or contains quotes)
+  const isDialogue = (text: string): boolean => {
+    return /^[A-Za-z\u0900-\u097F]+:/.test(text.trim()) || /[""]/.test(text);
+  };
 
-  // For Hindi and Roman modes, show the full sentence text
-  // with clickable words highlighted inline
-  const fullText =
-    displayMode === "hindi" ? sentence.hindi : sentence.romanized;
+  // Helper to render clickable words in Hindi text
+  const renderClickableText = (sentence: StorySentence) => {
+    const text = sentence.hindi;
+    if (!text) return null;
 
-  // Create a map of word forms for quick lookup
-  const wordMap = new Map<string, (typeof sentence.words)[0]>();
-  sentence.words.forEach((word) => {
-    const key =
-      displayMode === "hindi" ? word.hindi : word.romanized.toLowerCase();
-    wordMap.set(key, word);
-  });
+    // Create a map for word lookup (strip punctuation for matching)
+    const wordMap = new Map<string, (typeof sentence.words)[0]>();
+    sentence.words.forEach((word) => {
+      // Add multiple forms for matching
+      wordMap.set(word.hindi, word);
+      // Strip common punctuation for matching
+      const stripped = word.hindi.replace(/[।,?""\-—!।॥]/g, "");
+      if (stripped) wordMap.set(stripped, word);
+    });
 
-  // Try to highlight words in the full sentence text
-  const renderHighlightedText = () => {
-    if (!fullText) {
-      // Fallback to word-by-word if no full text
-      return sentence.words.map((word, i) => (
-        <span
-          key={i}
-          className={cn(
-            word.isNew
-              ? "word-new cursor-pointer"
-              : "word-known cursor-pointer",
-          )}
-          onClick={() => onWordClick(word)}
-        >
-          {displayMode === "hindi" ? word.hindi : word.romanized}
-          {i < sentence.words.length - 1 && " "}
-        </span>
-      ));
-    }
-
-    // For full text, show it directly but make words clickable
-    // Split by word boundaries while keeping delimiters
-    const parts = fullText.split(/(\s+|[,।?""\-—]+)/);
+    // Split by word boundaries, keeping delimiters
+    const parts = text.split(/(\s+|[,।?""\-—!।॥]+)/);
 
     return parts.map((part, i) => {
-      const trimmed = part.trim();
-      const lookupKey =
-        displayMode === "hindi" ? trimmed : trimmed.toLowerCase();
-      const word = wordMap.get(lookupKey);
+      const trimmed = part.replace(/[।,?""\-—!।॥]/g, "").trim();
+      const word = wordMap.get(trimmed) || wordMap.get(part.trim());
 
       if (word) {
         return (
           <span
             key={i}
             className={cn(
+              "cursor-pointer hover:bg-primary/20 rounded px-0.5 transition-colors",
               word.isNew
-                ? "word-new cursor-pointer"
-                : "word-known cursor-pointer",
+                ? "text-primary font-medium underline decoration-dotted underline-offset-4"
+                : "hover:text-primary",
             )}
             onClick={() => onWordClick(word)}
           >
@@ -519,21 +509,82 @@ function SentenceDisplay({
     });
   };
 
-  return (
-    <div className="sentence">
-      <p className={cn("text-lg", displayMode === "hindi" && "hindi-text")}>
-        {renderHighlightedText()}
-      </p>
-      {displayMode === "hindi" && sentence.romanized && (
-        <p className="text-sm text-muted-foreground mt-1">
-          {sentence.romanized}
-        </p>
-      )}
-      {sentence.grammarNotes && sentence.grammarNotes.length > 0 && (
-        <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-          ℹ️ {sentence.grammarNotes.join(" • ")}
-        </p>
-      )}
-    </div>
-  );
+  // Group sentences into paragraphs (dialogue on own lines, narrative grouped)
+  const renderContent = () => {
+    if (displayMode === "english") {
+      // For English mode, render as prose paragraphs
+      return sentences.map((sentence, i) => {
+        const text = sentence.english;
+        const dialogue = isDialogue(text);
+
+        return (
+          <p
+            key={i}
+            className={cn(
+              "text-lg leading-relaxed",
+              dialogue && "pl-4 border-l-2 border-primary/30 my-2",
+            )}
+          >
+            {text}
+          </p>
+        );
+      });
+    }
+
+    // For Hindi mode, group consecutive narration sentences into paragraphs
+    const elements: React.ReactElement[] = [];
+    let currentParagraph: { sentence: StorySentence; index: number }[] = [];
+
+    sentences.forEach((sentence, i) => {
+      const dialogue = isDialogue(sentence.hindi);
+
+      if (dialogue) {
+        // Flush current paragraph before dialogue
+        if (currentParagraph.length > 0) {
+          elements.push(
+            <p
+              key={`para-${elements.length}`}
+              className="text-lg hindi-text leading-relaxed mb-4"
+            >
+              {currentParagraph.map(({ sentence, index }) => (
+                <span key={index}>{renderClickableText(sentence)} </span>
+              ))}
+            </p>,
+          );
+          currentParagraph = [];
+        }
+
+        // Render dialogue on its own line
+        elements.push(
+          <p
+            key={i}
+            className="text-lg hindi-text leading-relaxed pl-4 border-l-2 border-primary/30 my-3"
+          >
+            {renderClickableText(sentence)}
+          </p>,
+        );
+      } else {
+        // Accumulate narration sentences
+        currentParagraph.push({ sentence, index: i });
+      }
+    });
+
+    // Flush remaining paragraph
+    if (currentParagraph.length > 0) {
+      elements.push(
+        <p
+          key={`para-${elements.length}`}
+          className="text-lg hindi-text leading-relaxed mb-4"
+        >
+          {currentParagraph.map(({ sentence, index }) => (
+            <span key={index}>{renderClickableText(sentence)} </span>
+          ))}
+        </p>,
+      );
+    }
+
+    return elements;
+  };
+
+  return <div className="space-y-2">{renderContent()}</div>;
 }

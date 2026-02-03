@@ -9,6 +9,7 @@ import { storiesRoutes } from "./routes/stories.js";
 import { exercisesRoutes } from "./routes/exercises.js";
 import { reviewsRoutes } from "./routes/reviews.js";
 import { usersRoutes } from "./routes/users.js";
+import { charactersRoutes } from "./routes/characters.js";
 
 const app = new Hono();
 
@@ -39,6 +40,7 @@ app.route("/api/stories", storiesRoutes);
 app.route("/api/exercises", exercisesRoutes);
 app.route("/api/reviews", reviewsRoutes);
 app.route("/api/users", usersRoutes);
+app.route("/api/characters", charactersRoutes);
 
 const port = parseInt(process.env.PORT || "8000");
 

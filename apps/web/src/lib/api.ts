@@ -227,14 +227,14 @@ class ApiClient {
     }>("/reviews/summary");
   }
 
-  async submitReview(userWordId: string, quality: number) {
+  async submitReview(wordId: string, quality: number) {
     return this.request<{
       nextReviewAt: string;
       newIntervalDays: number;
       status: string;
-    }>(`/reviews/${userWordId}/submit`, {
+    }>("/reviews/submit", {
       method: "POST",
-      body: JSON.stringify({ quality }),
+      body: JSON.stringify({ wordId, quality }),
     });
   }
 }
@@ -334,15 +334,16 @@ interface Exercise {
 }
 
 interface ReviewWord {
-  userWord: {
-    id: string;
-    wordId: string;
-    status: string;
-    familiarity: number;
-    timesReviewed: number;
-    word: Word;
-  };
-  exampleSentence: StorySentence | null;
+  id: string;
+  wordId: string;
+  hindi: string;
+  romanized: string;
+  english: string;
+  partOfSpeech: string;
+  status: string;
+  familiarity: number;
+  srsIntervalDays: number;
+  nextReviewAt: string | null;
 }
 
 export const api = new ApiClient();
