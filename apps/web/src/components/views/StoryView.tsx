@@ -50,7 +50,9 @@ export function StoryView() {
     (newStep: StoryStep) => {
       setStepInternal(newStep);
       if (storyId) {
-        navigate(`/story/${storyId}/${STEP_TO_STAGE[newStep]}`, { replace: true });
+        navigate(`/story/${storyId}/${STEP_TO_STAGE[newStep]}`, {
+          replace: true,
+        });
       }
     },
     [storyId, navigate],

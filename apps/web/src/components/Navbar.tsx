@@ -11,7 +11,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Flame, BookA, RefreshCw, CircleUser, Settings, LogOut } from "lucide-react";
+import {
+  Flame,
+  BookA,
+  RefreshCw,
+  CircleUser,
+  Settings,
+  LogOut,
+} from "lucide-react";
 
 export function Navbar() {
   const { user, logout } = useAuth();
@@ -66,11 +73,7 @@ export function Navbar() {
       {/* Profile dropdown */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="rounded-full h-9 w-9"
-          >
+          <Button variant="ghost" size="icon" className="rounded-full h-9 w-9">
             <CircleUser className="h-5 w-5" />
             <span className="sr-only">Profile menu</span>
           </Button>

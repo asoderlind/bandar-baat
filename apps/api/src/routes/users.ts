@@ -167,10 +167,7 @@ usersRoutes.patch("/me", async (c) => {
         .from(users)
         .where(and(eq(users.email, email)));
       if (existing.length > 0 && existing[0].id !== user.id) {
-        return c.json(
-          { success: false, error: "Email already in use" },
-          409,
-        );
+        return c.json({ success: false, error: "Email already in use" }, 409);
       }
       updates.email = email;
     }
