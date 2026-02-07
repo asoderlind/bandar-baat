@@ -69,7 +69,10 @@ class ApiClient {
   }
 
   async logout() {
-    await this.request("/auth/sign-out", { method: "POST" });
+    await this.request("/auth/sign-out", {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
   }
 
   async getSession() {
@@ -93,6 +96,26 @@ class ApiClient {
       streakDays: number;
       reviewsDue: number;
     }>("/users/me/stats");
+  }
+
+  async updateProfile(data: { name?: string; email?: string }) {
+    return this.request<{ id: string; email: string; name: string | null }>(
+      "/users/me",
+      {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      },
+    );
+  }
+
+  async changePassword(data: {
+    currentPassword: string;
+    newPassword: string;
+  }) {
+    return this.request<{ message: string }>("/users/me/change-password", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
   }
 
   async getProgress() {

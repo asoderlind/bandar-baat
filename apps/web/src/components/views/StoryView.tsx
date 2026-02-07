@@ -12,13 +12,49 @@ import { Volume2, VolumeX, Loader2 } from "lucide-react";
 
 type StoryStep = "preview" | "read" | "exercises" | "complete";
 
+const STAGE_TO_STEP: Record<string, StoryStep> = {
+  intro: "preview",
+  show: "read",
+  questions: "exercises",
+  complete: "complete",
+};
+
+const STEP_TO_STAGE: Record<StoryStep, string> = {
+  preview: "intro",
+  read: "show",
+  exercises: "questions",
+  complete: "complete",
+};
+
 export function StoryView() {
-  const { storyId } = useParams();
+  const { storyId, stage } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const tooltipRef = useRef<HTMLDivElement>(null);
 
-  const [step, setStep] = useState<StoryStep>("preview");
+  // Derive step from URL stage param
+  const stepFromUrl: StoryStep = (stage && STAGE_TO_STEP[stage]) || "preview";
+  const [step, setStepInternal] = useState<StoryStep>(stepFromUrl);
+
+  // Sync step when URL stage changes
+  useEffect(() => {
+    if (storyId && stage && STAGE_TO_STEP[stage]) {
+      setStepInternal(STAGE_TO_STEP[stage]);
+    } else if (storyId && !stage) {
+      setStepInternal("preview");
+    }
+  }, [storyId, stage]);
+
+  // Navigate to the correct URL when step changes
+  const setStep = useCallback(
+    (newStep: StoryStep) => {
+      setStepInternal(newStep);
+      if (storyId) {
+        navigate(`/story/${storyId}/${STEP_TO_STAGE[newStep]}`, { replace: true });
+      }
+    },
+    [storyId, navigate],
+  );
   const [displayMode, setDisplayMode] = useState<"hindi" | "english">("hindi");
   const [selectedWord, setSelectedWord] = useState<{
     hindi: string;
@@ -204,8 +240,7 @@ export function StoryView() {
       api.generateStory(params),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["stories"] });
-      navigate(`/story/${data.id}`, { replace: true });
-      setStep("preview");
+      navigate(`/story/${data.id}/intro`, { replace: true });
     },
   });
 
@@ -215,7 +250,9 @@ export function StoryView() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["story", story?.id] });
       queryClient.invalidateQueries({ queryKey: ["user-stats"] });
-      setStep("complete");
+      if (story?.id) {
+        navigate(`/story/${story.id}/complete`, { replace: true });
+      }
     },
   });
 

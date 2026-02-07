@@ -45,7 +45,8 @@ function App() {
         }
       >
         <Route index element={<DashboardView />} />
-        <Route path="story/:storyId?" element={<StoryView />} />
+        <Route path="story" element={<StoryView />} />
+        <Route path="story/:storyId/:stage?" element={<StoryView />} />
         <Route path="review" element={<ReviewView />} />
         <Route path="vocabulary" element={<VocabularyView />} />
         <Route path="history" element={<HistoryView />} />
