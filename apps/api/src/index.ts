@@ -11,6 +11,7 @@ import { reviewsRoutes } from "./routes/reviews.js";
 import { usersRoutes } from "./routes/users.js";
 import { charactersRoutes } from "./routes/characters.js";
 import { ttsRoutes } from "./routes/tts.js";
+import { dictionaryRoutes } from "./routes/dictionary.js";
 
 const app = new Hono();
 
@@ -43,6 +44,7 @@ app.route("/api/reviews", reviewsRoutes);
 app.route("/api/users", usersRoutes);
 app.route("/api/characters", charactersRoutes);
 app.route("/api/tts", ttsRoutes);
+app.route("/api/dictionary", dictionaryRoutes);
 
 const port = parseInt(process.env.PORT || "8000");
 

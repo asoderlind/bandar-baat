@@ -27,6 +27,7 @@ export function StoryView() {
     partOfSpeech?: string;
     isNew?: boolean;
     position?: { x: number; y: number };
+    loading?: boolean;
   } | null>(null);
   const [currentExercise, setCurrentExercise] = useState(0);
   const [exerciseAnswer, setExerciseAnswer] = useState("");
@@ -36,6 +37,18 @@ export function StoryView() {
   } | null>(null);
   const [topic, setTopic] = useState("");
   const [newWordCount, setNewWordCount] = useState(DEFAULT_NEW_WORDS_PER_STORY);
+
+  // Cache for dictionary lookups to avoid repeated API calls
+  const dictCacheRef = useRef<
+    Map<
+      string,
+      {
+        romanized: string;
+        english: string;
+        partOfSpeech?: string;
+      }
+    >
+  >(new Map());
 
   // Audio playback state
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
@@ -86,6 +99,68 @@ export function StoryView() {
     },
     [playingAudio],
   );
+
+  // Dictionary lookup for unannotated words
+  useEffect(() => {
+    if (!selectedWord?.loading) return;
+
+    const word = selectedWord.hindi;
+
+    // Check cache first
+    const cached = dictCacheRef.current.get(word);
+    if (cached) {
+      setSelectedWord((prev) =>
+        prev ? { ...prev, ...cached, loading: false } : null,
+      );
+      return;
+    }
+
+    let cancelled = false;
+    api
+      .lookupWord(word)
+      .then((result) => {
+        if (cancelled) return;
+        let english = "";
+        let partOfSpeech: string | undefined;
+        if (result.found && result.definitions.length > 0) {
+          const def = result.definitions[0];
+          english = def.meanings.slice(0, 3).join("; ");
+          partOfSpeech = def.partOfSpeech;
+        }
+
+        const resolved = {
+          romanized: result.romanized || "",
+          english: english || "(no definition found)",
+          partOfSpeech,
+        };
+
+        // Cache it
+        dictCacheRef.current.set(word, resolved);
+
+        setSelectedWord((prev) =>
+          prev && prev.hindi === word
+            ? { ...prev, ...resolved, loading: false }
+            : prev,
+        );
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSelectedWord((prev) =>
+          prev && prev.hindi === word
+            ? {
+                ...prev,
+                romanized: "",
+                english: "(lookup failed)",
+                loading: false,
+              }
+            : prev,
+        );
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedWord?.loading, selectedWord?.hindi]);
 
   // Close tooltip when clicking outside
   useEffect(() => {
@@ -416,24 +491,37 @@ export function StoryView() {
                       )}
                     </Button>
                   </div>
-                  <div className="text-sm text-muted-foreground italic">
-                    {selectedWord.romanized}
-                  </div>
-                  <div className="font-medium text-lg">
-                    {selectedWord.english}
-                  </div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {selectedWord.partOfSpeech && (
-                      <span className="text-xs text-muted-foreground">
-                        {selectedWord.partOfSpeech}
+                  {selectedWord.loading ? (
+                    <div className="flex items-center gap-2 py-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      <span className="text-sm text-muted-foreground">
+                        Looking up…
                       </span>
-                    )}
-                    {selectedWord.isNew && (
-                      <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">
-                        New word
-                      </span>
-                    )}
-                  </div>
+                    </div>
+                  ) : (
+                    <>
+                      {selectedWord.romanized && (
+                        <div className="text-sm text-muted-foreground italic">
+                          {selectedWord.romanized}
+                        </div>
+                      )}
+                      <div className="font-medium text-lg">
+                        {selectedWord.english}
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {selectedWord.partOfSpeech && (
+                          <span className="text-xs text-muted-foreground">
+                            {selectedWord.partOfSpeech}
+                          </span>
+                        )}
+                        {selectedWord.isNew && (
+                          <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">
+                            New word
+                          </span>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
                 <Button
                   variant="ghost"
@@ -616,6 +704,7 @@ function StoryProse({
     partOfSpeech?: string;
     isNew?: boolean;
     position?: { x: number; y: number };
+    loading?: boolean;
   }) => void;
 }) {
   // Helper to detect if a sentence is dialogue (starts with speaker: or contains quotes)
@@ -642,10 +731,11 @@ function StoryProse({
     const parts = text.split(/(\s+|[,।?""\-—!।॥]+)/);
 
     return parts.map((part, i) => {
-      const trimmed = part.replace(/[।,?""\-—!।॥]/g, "").trim();
+      const trimmed = part.replace(/[।,?""\-—!।॥]+/g, "").trim();
       const word = wordMap.get(trimmed) || wordMap.get(part.trim());
 
       if (word) {
+        // Annotated word — show tooltip immediately
         return (
           <span
             key={i}
@@ -670,6 +760,33 @@ function StoryProse({
           </span>
         );
       }
+
+      // Non-annotated word — make clickable if it contains Devanagari
+      const hasDevanagari = /[\u0900-\u097F]/.test(trimmed);
+      if (hasDevanagari && trimmed.length > 0) {
+        return (
+          <span
+            key={i}
+            className="cursor-pointer hover:bg-muted rounded px-0.5 transition-colors"
+            onClick={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              onWordClick({
+                hindi: trimmed,
+                romanized: "",
+                english: "",
+                position: {
+                  x: rect.left + rect.width / 2,
+                  y: rect.bottom + 8,
+                },
+                loading: true,
+              });
+            }}
+          >
+            {part}
+          </span>
+        );
+      }
+
       return <span key={i}>{part}</span>;
     });
   };

@@ -268,6 +268,19 @@ class ApiClient {
   getAudioUrl(cacheKey: string) {
     return `${API_BASE}/tts/audio/${cacheKey}`;
   }
+
+  // Dictionary lookup
+  async lookupWord(word: string) {
+    return this.request<{
+      word: string;
+      found: boolean;
+      romanized?: string;
+      definitions: {
+        partOfSpeech: string;
+        meanings: string[];
+      }[];
+    }>(`/dictionary/lookup?word=${encodeURIComponent(word)}`);
+  }
 }
 
 // Types
