@@ -20,13 +20,13 @@ const EXERCISE_RANGE = { min: 4, max: 6 };
 // ── Section builders (easy to edit independently) ────────────
 
 function roleSection(): string {
-  return `You are a Hindi language teaching assistant creating immersive reading content for language learners.
-You are also a native-level Hindi speaker who writes grammatically perfect Hindi.`;
+  return `You are a Hindi language teaching assistant creating conversational practice content for language learners.
+You are also a native-level Hindi speaker who writes grammatically perfect, natural-sounding spoken Hindi.`;
 }
 
 function taskSection(level: string, topic: string): string {
-  return `Generate a short story for a learner at ${level} level.
-The story should read naturally, like a passage from a book — not a list of disconnected sentences.
+  return `Generate a short conversational story for a learner at ${level} level.
+The story should be dialogue-heavy — at least 60-70% of the content should be characters talking to each other, with brief narration to set the scene. Think of it as a scene the learner might encounter in real life.
 
 TOPIC/THEME: ${topic}`;
 }
@@ -56,14 +56,15 @@ Feel free to develop their personalities and relationships naturally. You may in
 
 function styleGuidelinesSection(): string {
   return `STYLE GUIDELINES:
-- Write ${SENTENCE_RANGE.min}-${SENTENCE_RANGE.max} sentences that flow together as cohesive prose
-- Vary sentence length and structure for natural rhythm
-- Use descriptive narration, inner thoughts, and dialogue as appropriate to the story
-- Don't force dialogue — only include it when it serves the narrative
-- Build a mini story arc: setup → development → resolution
-- Show, don't tell: use sensory details and specific actions
-- Transitions between sentences should feel natural and connected
-- Every sentence must advance the plot, develop a character, or set the scene — no random filler actions`;
+- Write ${SENTENCE_RANGE.min}-${SENTENCE_RANGE.max} sentences total
+- Make it DIALOGUE-HEAVY: most of the story should be characters speaking to each other
+- Use short narration lines (1-2 sentences) only to set the scene or describe actions between dialogue
+- Dialogue should sound like real spoken Hindi — use colloquial forms, filler words (अच्छा, हाँ, अरे, चलो), and natural turn-taking
+- Create a realistic everyday scenario: ordering food, asking for directions, shopping, meeting a friend, a phone call, visiting a doctor, etc.
+- Build a mini conversation arc: greeting/opening → main exchange → closing/goodbye
+- Each dialogue line should be something the learner could realistically say or hear in India
+- Vary speakers and keep exchanges natural — avoid long monologues
+- Every sentence must advance the conversation or set context — no random filler actions`;
 }
 
 function newWordRulesSection(): string {
