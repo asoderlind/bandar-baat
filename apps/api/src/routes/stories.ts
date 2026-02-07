@@ -13,7 +13,11 @@ import {
 } from "drizzle-orm";
 import Anthropic from "@anthropic-ai/sdk";
 import { requireAuth, type AuthContext } from "../lib/middleware.js";
-import { buildStoryGenerationPrompt } from "../lib/prompts.js";
+import {
+  buildStoryGenerationPrompt,
+  buildStoryValidationPrompt,
+} from "../lib/prompts.js";
+import { DEFAULT_NEW_WORDS_PER_STORY } from "@monke-say/shared";
 import { db } from "../db/index.js";
 import {
   stories,
@@ -127,15 +131,19 @@ storiesRoutes.get("/ready", async (c) => {
             .where(
               and(eq(words.cefrLevel, level), notInArray(words.id, knownIds)),
             )
-            .limit(5)
-        : db.select().from(words).where(eq(words.cefrLevel, level)).limit(5);
+            .limit(DEFAULT_NEW_WORDS_PER_STORY)
+        : db
+            .select()
+            .from(words)
+            .where(eq(words.cefrLevel, level))
+            .limit(DEFAULT_NEW_WORDS_PER_STORY);
 
     const availableNewWords = await newWordsQuery;
 
     return c.json({
       success: true,
       data: {
-        ready: availableNewWords.length >= 3,
+        ready: availableNewWords.length >= 1,
         level,
         newWordsAvailable: availableNewWords.length,
         suggestedTopic: "daily life",
@@ -152,6 +160,7 @@ const generateStorySchema = z.object({
   includeWordIds: z.array(z.string()).optional(),
   focusGrammarId: z.string().optional(),
   difficultyOverride: z.enum(["A1", "A2", "B1", "B2"]).optional(),
+  newWordCount: z.number().int().min(1).max(8).optional(),
 });
 
 /**
@@ -202,6 +211,7 @@ storiesRoutes.post(
       const knownWords = knownWordsResult.map((r) => r.word);
 
       // Get new words to introduce
+      const wordLimit = request.newWordCount ?? DEFAULT_NEW_WORDS_PER_STORY;
       const knownWordIds = knownWords.map((w) => w.id);
       const newWordsQuery =
         knownWordIds.length > 0
@@ -214,8 +224,12 @@ storiesRoutes.post(
                   notInArray(words.id, knownWordIds),
                 ),
               )
-              .limit(5)
-          : db.select().from(words).where(eq(words.cefrLevel, level)).limit(5);
+              .limit(wordLimit)
+          : db
+              .select()
+              .from(words)
+              .where(eq(words.cefrLevel, level))
+              .limit(wordLimit);
 
       const newWords = await newWordsQuery;
 
@@ -392,6 +406,101 @@ storiesRoutes.post(
           sentences: [],
           exercises: [],
         };
+      }
+
+      // ── Grammar & cohesion validation pass ──────────────────
+      if (storyData.content_hindi && storyData.content_english) {
+        try {
+          const validationPrompt = buildStoryValidationPrompt({
+            storyHindi: storyData.content_hindi,
+            storyEnglish: storyData.content_english,
+            level,
+            topic,
+          });
+
+          const validationMessage = await anthropic.messages.create({
+            model: "claude-sonnet-4-20250514",
+            max_tokens: 8192,
+            messages: [{ role: "user", content: validationPrompt }],
+          });
+
+          const validationText =
+            validationMessage.content[0].type === "text"
+              ? validationMessage.content[0].text
+              : "";
+
+          let validationResult: any;
+          try {
+            let vjson = validationText.trim();
+            vjson = vjson.replace(/^```(?:json)?\s*\n?/i, "");
+            vjson = vjson.replace(/\n?```\s*$/i, "");
+            vjson = vjson.trim();
+
+            let vBrace = 0,
+              vStart = -1,
+              vEnd = -1;
+            for (let i = 0; i < vjson.length; i++) {
+              if (vjson[i] === "{") {
+                if (vStart === -1) vStart = i;
+                vBrace++;
+              } else if (vjson[i] === "}") {
+                vBrace--;
+                if (vBrace === 0 && vStart !== -1) {
+                  vEnd = i;
+                  break;
+                }
+              }
+            }
+            if (vStart !== -1 && vEnd !== -1) {
+              vjson = vjson.slice(vStart, vEnd + 1);
+            }
+            validationResult = JSON.parse(vjson);
+          } catch {
+            console.warn("Validation JSON parse failed, skipping corrections");
+            validationResult = null;
+          }
+
+          if (validationResult?.hasIssues) {
+            console.log(
+              `Story validation found ${validationResult.issues?.length || 0} issues — applying corrections`,
+            );
+            // Apply corrected content
+            if (validationResult.corrected_hindi) {
+              storyData.content_hindi = validationResult.corrected_hindi;
+            }
+            if (validationResult.corrected_romanized) {
+              storyData.content_romanized =
+                validationResult.corrected_romanized;
+            }
+            if (validationResult.corrected_english) {
+              storyData.content_english = validationResult.corrected_english;
+            }
+            // Merge corrected sentences
+            if (
+              validationResult.corrected_sentences &&
+              Array.isArray(validationResult.corrected_sentences) &&
+              storyData.sentences
+            ) {
+              for (const corrected of validationResult.corrected_sentences) {
+                if (corrected.changed && storyData.sentences[corrected.index]) {
+                  const original = storyData.sentences[corrected.index];
+                  original.hindi = corrected.hindi || original.hindi;
+                  original.romanized =
+                    corrected.romanized || original.romanized;
+                  original.english = corrected.english || original.english;
+                }
+              }
+            }
+          } else {
+            console.log("Story validation passed — no issues found");
+          }
+        } catch (validationError) {
+          console.warn(
+            "Grammar/cohesion validation failed, using original story:",
+            validationError,
+          );
+          // Non-fatal: we keep the original story
+        }
       }
 
       // Create story in database

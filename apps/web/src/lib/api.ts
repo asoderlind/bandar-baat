@@ -167,6 +167,7 @@ class ApiClient {
     topic?: string;
     includeWordIds?: string[];
     focusGrammarId?: string;
+    newWordCount?: number;
   }) {
     return this.request<Story>("/stories/generate", {
       method: "POST",

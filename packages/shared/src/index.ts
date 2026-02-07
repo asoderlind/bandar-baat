@@ -259,7 +259,8 @@ export const PARTS_OF_SPEECH: PartOfSpeech[] = [
 export const DEFAULT_SRS_EASE_FACTOR = 2.5;
 export const DEFAULT_SRS_INTERVAL = 1;
 
-export const NEW_WORDS_PER_STORY = { min: 3, max: 5 };
+export const NEW_WORDS_PER_STORY = { min: 1, max: 8 };
+export const DEFAULT_NEW_WORDS_PER_STORY = 3;
 export const STORY_SENTENCE_COUNT = { min: 8, max: 15 };
 
 // ============================================

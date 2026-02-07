@@ -1,5 +1,9 @@
 import type { CEFRLevel } from "@monke-say/shared";
 
+// ============================================
+// STORY GENERATION PROMPT
+// ============================================
+
 export interface StoryGenerationContext {
   level: CEFRLevel;
   topic: string;
@@ -9,52 +13,92 @@ export interface StoryGenerationContext {
   characters?: string;
 }
 
-/**
- * Generates the story generation prompt for Claude.
- * Factored out for easy tweaking and maintenance.
- */
-export function buildStoryGenerationPrompt(
-  ctx: StoryGenerationContext,
-): string {
-  const characterSection = ctx.characters
-    ? `
-RECURRING CHARACTERS (use these when appropriate for continuity):
-${ctx.characters}
-Feel free to develop their personalities and relationships naturally. You may introduce new minor characters as needed.
-`
-    : "";
+// ── Tweakable constants ──────────────────────────────────────
+const SENTENCE_RANGE = { min: 10, max: 15 };
+const EXERCISE_RANGE = { min: 4, max: 6 };
 
+// ── Section builders (easy to edit independently) ────────────
+
+function roleSection(): string {
   return `You are a Hindi language teaching assistant creating immersive reading content for language learners.
+You are also a native-level Hindi speaker who writes grammatically perfect Hindi.`;
+}
 
-Generate a short story for a learner at ${ctx.level} level. The story should read naturally, like a passage from a book—not a list of disconnected sentences.
+function taskSection(level: string, topic: string): string {
+  return `Generate a short story for a learner at ${level} level.
+The story should read naturally, like a passage from a book — not a list of disconnected sentences.
 
-KNOWN VOCABULARY (the learner can read these comfortably):
-${ctx.knownVocabulary || "Basic greetings, pronouns, and common verbs"}
+TOPIC/THEME: ${topic}`;
+}
 
-NEW WORDS TO INTRODUCE (weave each naturally into the story, appearing 2-3 times):
-${ctx.newVocabulary}
+function vocabularySection(
+  knownVocabulary: string,
+  newVocabulary: string,
+): string {
+  return `KNOWN VOCABULARY (the learner can read these comfortably):
+${knownVocabulary || "Basic greetings, pronouns, and common verbs"}
 
-GRAMMAR TO PRACTICE:
-${ctx.grammarConcepts}
+NEW WORDS TO TEACH (incorporate naturally — see rules below):
+${newVocabulary}`;
+}
 
-TOPIC/THEME: ${ctx.topic}
-${characterSection}
-STYLE GUIDELINES:
-- Write 12-18 sentences that flow together as cohesive prose
+function grammarSection(grammarConcepts: string): string {
+  return `GRAMMAR TO PRACTICE:
+${grammarConcepts}`;
+}
+
+function characterSectionBuilder(characters?: string): string {
+  if (!characters) return "";
+  return `RECURRING CHARACTERS (use these when appropriate for continuity):
+${characters}
+Feel free to develop their personalities and relationships naturally. You may introduce new minor characters as needed.`;
+}
+
+function styleGuidelinesSection(): string {
+  return `STYLE GUIDELINES:
+- Write ${SENTENCE_RANGE.min}-${SENTENCE_RANGE.max} sentences that flow together as cohesive prose
 - Vary sentence length and structure for natural rhythm
 - Use descriptive narration, inner thoughts, and dialogue as appropriate to the story
-- Don't force dialogue—only include it when it serves the narrative
+- Don't force dialogue — only include it when it serves the narrative
 - Build a mini story arc: setup → development → resolution
 - Show, don't tell: use sensory details and specific actions
 - Transitions between sentences should feel natural and connected
+- Every sentence must advance the plot, develop a character, or set the scene — no random filler actions`;
+}
 
-LANGUAGE CONSTRAINTS:
+function newWordRulesSection(): string {
+  return `NEW WORD USAGE RULES:
+- Integrate new words ONLY when they fit the story naturally
+- It is perfectly fine to use a new word just once if forcing a second use would feel unnatural
+- NEVER insert random unrelated actions (e.g. "he drank water", "she read a book") just to practise a word — if a word doesn't fit the story, skip it
+- The story's coherence is more important than word coverage`;
+}
+
+function hindiGrammarRulesSection(): string {
+  return `CRITICAL HINDI GRAMMAR RULES — follow these exactly:
+1. VERB CONJUGATION: Never use the bare infinitive (e.g. जाना, बोलना) as a main verb with है.
+   - "infinitive + है" (जाना है) = obligation ("has to go"). This is NOT simple present tense.
+   - Simple present (habitual): stem + ता/ती/ते + है/हैं  →  जाता है (goes), बोलती है (speaks)
+   - Present progressive: stem + रहा/रही/रहे + है/हैं  →  जा रहा है (is going)
+   - Simple past: stem + आ/ई/ए  →  गया (went), बोला (said)
+2. GENDER AGREEMENT: Adjectives and verbs must agree with the noun's gender.
+   - अच्छा लड़का / अच्छी लड़की
+   - लड़का जाता है / लड़की जाती है
+3. POSTPOSITION CASE: When a noun is followed by a postposition, it takes the oblique case.
+   - लड़का → लड़के को, घर → घर में
+4. ने-construction in perfective: Transitive verbs in simple past use ने with the subject; the verb agrees with the object.
+   - लड़के ने किताब पढ़ी (the boy read the book — verb agrees with किताब, feminine)`;
+}
+
+function languageConstraintsSection(level: string): string {
+  return `LANGUAGE CONSTRAINTS:
 - Use only known vocabulary + new words (proper nouns like names are OK)
-- Each new word should appear at least twice in different contexts
 - Keep individual sentences clear, but let them build on each other
-- Match complexity to ${ctx.level} level
+- Match complexity to ${level} level`;
+}
 
-Return your response as valid JSON with this exact structure:
+function outputFormatSection(): string {
+  return `Return your response as valid JSON with this exact structure:
 {
   "title": "Story title in Hindi (with English subtitle)",
   "content_hindi": "Full story text in Devanagari as flowing prose",
@@ -71,7 +115,7 @@ Return your response as valid JSON with this exact structure:
     {
       "index": 0,
       "hindi": "Sentence in Devanagari",
-      "romanized": "Sentence romanized", 
+      "romanized": "Sentence romanized",
       "english": "English translation",
       "words": [
         {
@@ -97,14 +141,119 @@ Return your response as valid JSON with this exact structure:
       "options": ["option1", "option2", "option3", "option4"]
     }
   ]
+}`;
 }
 
-EXERCISE TYPES (generate 4-6 varied exercises):
+function exercisesSection(): string {
+  return `EXERCISE TYPES (generate ${EXERCISE_RANGE.min}-${EXERCISE_RANGE.max} varied exercises):
 - COMPREHENSION: Questions about story meaning, character motivations, or plot
 - FILL_BLANK: Complete a sentence from the story with the correct word
 - TRANSLATE_TO_HINDI: Translate an English phrase/sentence to Hindi
-- TRANSLATE_TO_ENGLISH: Translate a Hindi phrase/sentence to English  
+- TRANSLATE_TO_ENGLISH: Translate a Hindi phrase/sentence to English
 - MULTIPLE_CHOICE: Vocabulary or grammar questions with 4 options
 
 Focus exercises on the new vocabulary and grammar concepts being practiced.`;
+}
+
+// ── Main builder ─────────────────────────────────────────────
+
+/**
+ * Builds the full story-generation prompt from modular sections.
+ * Each section is a standalone function so you can tweak wording
+ * without touching unrelated parts.
+ */
+export function buildStoryGenerationPrompt(
+  ctx: StoryGenerationContext,
+): string {
+  const sections = [
+    roleSection(),
+    taskSection(ctx.level, ctx.topic),
+    vocabularySection(ctx.knownVocabulary, ctx.newVocabulary),
+    grammarSection(ctx.grammarConcepts),
+    characterSectionBuilder(ctx.characters),
+    styleGuidelinesSection(),
+    newWordRulesSection(),
+    hindiGrammarRulesSection(),
+    languageConstraintsSection(ctx.level),
+    outputFormatSection(),
+    exercisesSection(),
+  ].filter(Boolean);
+
+  return sections.join("\n\n");
+}
+
+// ============================================
+// GRAMMAR & COHESION VALIDATION PROMPT
+// ============================================
+
+export interface StoryValidationContext {
+  storyHindi: string;
+  storyEnglish: string;
+  level: CEFRLevel;
+  topic: string;
+}
+
+/**
+ * Builds a prompt that asks the LLM to review a generated story
+ * for grammar mistakes and cohesion problems, then return a
+ * corrected version if needed.
+ */
+export function buildStoryValidationPrompt(
+  ctx: StoryValidationContext,
+): string {
+  return `You are a Hindi language expert reviewing a generated story for a ${ctx.level}-level Hindi learner.
+
+ORIGINAL STORY (Hindi):
+${ctx.storyHindi}
+
+ENGLISH TRANSLATION:
+${ctx.storyEnglish}
+
+INTENDED TOPIC: ${ctx.topic}
+
+Review the story for the following issues and return corrections:
+
+1. GRAMMAR CHECK
+   - Verb conjugation: ensure no bare infinitive + है used as simple present (e.g. "जाना है" when meaning "goes" — should be "जाता है")
+   - Gender agreement on adjectives and verbs
+   - Correct postposition case (oblique forms)
+   - Proper use of ने-construction in perfective tense
+
+2. COHESION CHECK
+   - Every sentence should connect logically to the previous one
+   - No random, unrelated actions inserted (e.g. sudden "he drank water" in a shopping story)
+   - The story should stay focused on the topic/setting
+   - There should be a clear mini arc: setup → development → resolution
+
+3. NATURALNESS CHECK
+   - Sentences should sound like something a native Hindi speaker would actually say
+   - Dialogue (if any) should feel natural, not textbook-stilted
+
+Return your response as valid JSON:
+{
+  "hasIssues": true/false,
+  "issues": [
+    {
+      "type": "GRAMMAR" | "COHESION" | "NATURALNESS",
+      "description": "What the issue is",
+      "original": "The problematic text",
+      "corrected": "The fixed text"
+    }
+  ],
+  "corrected_hindi": "Full corrected story in Devanagari (or original if no issues)",
+  "corrected_romanized": "Full corrected story romanized",
+  "corrected_english": "Updated English translation",
+  "corrected_sentences": [
+    {
+      "index": 0,
+      "hindi": "Corrected sentence in Devanagari",
+      "romanized": "Corrected sentence romanized",
+      "english": "Corrected English translation",
+      "changed": true/false
+    }
+  ]
+}
+
+If the story is already correct, set "hasIssues" to false and return the original text unchanged.
+Only fix actual errors — do not rephrase sentences that are already correct.`;
 }
