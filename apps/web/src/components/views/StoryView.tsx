@@ -429,7 +429,10 @@ export function StoryView() {
                 <StoryProse
                   sentences={story.sentences}
                   displayMode={displayMode}
-                  onWordClick={setSelectedWord}
+                  onWordClick={(word) => {
+                    setSelectedWord(word);
+                    playAudio(word.hindi);
+                  }}
                 />
               ) : (
                 // Fallback for stories without parsed sentences
