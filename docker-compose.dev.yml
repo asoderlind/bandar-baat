@@ -15,6 +15,23 @@ services:
       timeout: 5s
       retries: 5
 
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   api:
     build:
       context: .
@@ -30,10 +47,16 @@ services:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/monke_say
       - PORT=8000
       - GOOGLE_APPLICATION_CREDENTIALS=/app/service-key.json
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_BUCKET=monke-say
     env_file:
       - .env
     depends_on:
       db:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     command: pnpm dev
 
@@ -55,3 +78,4 @@ services:
 
 volumes:
   postgres_data:
+  minio_data:

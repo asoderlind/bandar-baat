@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { auth } from "./auth.js";
+import { initStorage } from "./lib/storage.js";
 import { wordsRoutes } from "./routes/words.js";
 import { grammarRoutes } from "./routes/grammar.js";
 import { storiesRoutes } from "./routes/stories.js";
@@ -48,9 +49,19 @@ app.route("/api/dictionary", dictionaryRoutes);
 
 const port = parseInt(process.env.PORT || "8000");
 
-console.log(`🐒 Monke-Say API running on http://localhost:${port}`);
+async function main() {
+  // Ensure MinIO bucket exists before accepting requests
+  await initStorage();
 
-serve({
-  fetch: app.fetch,
-  port,
+  console.log(`🐒 Monke-Say API running on http://localhost:${port}`);
+
+  serve({
+    fetch: app.fetch,
+    port,
+  });
+}
+
+main().catch((err) => {
+  console.error("Failed to start server:", err);
+  process.exit(1);
 });

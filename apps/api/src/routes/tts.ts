@@ -1,14 +1,15 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { readFile } from "fs/promises";
 import { requireAuth, type AuthContext } from "../lib/middleware.js";
 import {
   synthesizeHindi,
   synthesizeHindiSlow,
   HINDI_VOICES,
+  audioObjectKey,
   type HindiVoice,
 } from "../lib/tts.js";
+import { getObject } from "../lib/storage.js";
 
 export const ttsRoutes = new Hono<{ Variables: AuthContext }>();
 
@@ -75,7 +76,7 @@ ttsRoutes.post(
 
 /**
  * GET /api/tts/audio/:cacheKey
- * Serve cached audio file
+ * Serve cached audio file from MinIO
  */
 ttsRoutes.get("/audio/:cacheKey", async (c) => {
   try {
@@ -86,16 +87,18 @@ ttsRoutes.get("/audio/:cacheKey", async (c) => {
       return c.json({ success: false, error: "Invalid audio key" }, 400);
     }
 
-    const audioDir = process.env.AUDIO_STORAGE_PATH || "/tmp/monke-say-audio";
-    const audioPath = `${audioDir}/${cacheKey}.mp3`;
+    const key = audioObjectKey(cacheKey);
+    const result = await getObject(key);
 
-    const audioBuffer = await readFile(audioPath);
+    if (!result) {
+      return c.json({ success: false, error: "Audio not found" }, 404);
+    }
 
-    return new Response(audioBuffer, {
+    return new Response(new Uint8Array(result.buffer), {
       headers: {
         "Content-Type": "audio/mpeg",
         "Cache-Control": "public, max-age=31536000", // 1 year cache
-        "Content-Length": audioBuffer.length.toString(),
+        "Content-Length": result.buffer.length.toString(),
       },
     });
   } catch (error) {

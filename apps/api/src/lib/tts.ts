@@ -4,8 +4,7 @@
 
 import { TextToSpeechClient } from "@google-cloud/text-to-speech";
 import { createHash } from "crypto";
-import { writeFile, mkdir, access } from "fs/promises";
-import { join } from "path";
+import { objectExists, putObject, StoragePrefix } from "./storage.js";
 
 // Voice options for Hindi
 export const HINDI_VOICES = {
@@ -26,9 +25,6 @@ export interface TTSOptions {
   pitch?: number; // -20.0 to 20.0, default 0
 }
 
-// Audio storage directory
-const AUDIO_DIR = process.env.AUDIO_STORAGE_PATH || "/tmp/monke-say-audio";
-
 let ttsClient: TextToSpeechClient | null = null;
 
 /**
@@ -36,8 +32,6 @@ let ttsClient: TextToSpeechClient | null = null;
  */
 function getClient(): TextToSpeechClient {
   if (!ttsClient) {
-    // Client will use GOOGLE_APPLICATION_CREDENTIALS env var for auth
-    // Or you can pass credentials directly
     const credentials = process.env.GOOGLE_TTS_CREDENTIALS
       ? JSON.parse(process.env.GOOGLE_TTS_CREDENTIALS)
       : undefined;
@@ -64,50 +58,33 @@ function generateCacheKey(
 }
 
 /**
- * Ensure audio directory exists
+ * Build the full MinIO object key for an audio cache entry.
  */
-async function ensureAudioDir(): Promise<void> {
-  try {
-    await access(AUDIO_DIR);
-  } catch {
-    await mkdir(AUDIO_DIR, { recursive: true });
-  }
+export function audioObjectKey(cacheKey: string): string {
+  return `${StoragePrefix.AUDIO}${cacheKey}.mp3`;
 }
 
 /**
- * Check if audio file exists in cache
- */
-async function getAudioPath(cacheKey: string): Promise<string | null> {
-  const filePath = join(AUDIO_DIR, `${cacheKey}.mp3`);
-  try {
-    await access(filePath);
-    return filePath;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Synthesize Hindi text to speech
+ * Synthesize Hindi text to speech.
+ * Audio is cached in MinIO under  audio/<md5>.mp3
  */
 export async function synthesizeHindi(
   text: string,
   options: TTSOptions = {},
-): Promise<{ audioPath: string; cacheKey: string }> {
+): Promise<{ cacheKey: string }> {
   const voice = options.voice || HINDI_VOICES.FEMALE_1;
   const speakingRate = options.speakingRate || 1.0;
   const pitch = options.pitch || 0;
 
   const cacheKey = generateCacheKey(text, voice, speakingRate);
+  const key = audioObjectKey(cacheKey);
 
-  // Check cache first
-  await ensureAudioDir();
-  const existingPath = await getAudioPath(cacheKey);
-  if (existingPath) {
-    return { audioPath: existingPath, cacheKey };
+  // Check MinIO cache
+  if (await objectExists(key)) {
+    return { cacheKey };
   }
 
-  // Generate new audio
+  // Generate new audio via Google Cloud TTS
   const client = getClient();
 
   const [response] = await client.synthesizeSpeech({
@@ -120,7 +97,6 @@ export async function synthesizeHindi(
       audioEncoding: "MP3",
       speakingRate,
       pitch,
-      // Higher quality settings
       sampleRateHertz: 24000,
     },
   });
@@ -129,11 +105,10 @@ export async function synthesizeHindi(
     throw new Error("No audio content returned from TTS API");
   }
 
-  // Save to cache
-  const audioPath = join(AUDIO_DIR, `${cacheKey}.mp3`);
-  await writeFile(audioPath, response.audioContent as Buffer);
+  // Store in MinIO
+  await putObject(key, response.audioContent as Buffer, "audio/mpeg");
 
-  return { audioPath, cacheKey };
+  return { cacheKey };
 }
 
 /**
@@ -142,7 +117,7 @@ export async function synthesizeHindi(
 export async function synthesizeHindiSlow(
   text: string,
   options: Omit<TTSOptions, "speakingRate"> = {},
-): Promise<{ audioPath: string; cacheKey: string }> {
+): Promise<{ cacheKey: string }> {
   return synthesizeHindi(text, {
     ...options,
     speakingRate: 0.75,
@@ -155,11 +130,11 @@ export async function synthesizeHindiSlow(
 export async function synthesizeSentences(
   sentences: string[],
   options: TTSOptions = {},
-): Promise<Array<{ text: string; audioPath: string; cacheKey: string }>> {
+): Promise<Array<{ text: string; cacheKey: string }>> {
   const results = await Promise.all(
     sentences.map(async (text) => {
-      const { audioPath, cacheKey } = await synthesizeHindi(text, options);
-      return { text, audioPath, cacheKey };
+      const { cacheKey } = await synthesizeHindi(text, options);
+      return { text, cacheKey };
     }),
   );
   return results;
