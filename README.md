@@ -1,4 +1,4 @@
-# 🐒 Kahani
+# 🐒 Bandar-baat
 
 A self-hosted web app for learning Hindi through AI-generated stories and exercises, built around the concept of **comprehensible input (Krashen's i+1)**. The system tracks your vocabulary and grammar knowledge, then uses Claude to generate personalized short stories that are mostly understandable but introduce a few new elements each session.
 
@@ -10,7 +10,7 @@ A self-hosted web app for learning Hindi through AI-generated stories and exerci
 
 ## Why?
 
-Traditional flashcard apps drill isolated words. Immersion content is overwhelming for beginners. Kahani sits in the gap — every piece of content is personalized to be just at the edge of your ability, with full context.
+Traditional flashcard apps drill isolated words. Immersion content is overwhelming for beginners. bandar-baat sits in the gap — every piece of content is personalized to be just at the edge of your ability, with full context.
 
 ## Tech Stack
 
@@ -39,7 +39,7 @@ Traditional flashcard apps drill isolated words. Immersion content is overwhelmi
 ## Project Structure
 
 ```
-kahani/
+bandar-baat/
 ├── apps/
 │   ├── api/              # Hono backend API
 │   │   ├── src/
@@ -71,8 +71,8 @@ kahani/
 ### 1. Clone & install dependencies
 
 ```bash
-git clone https://github.com/asoderlind/kahani.git
-cd kahani
+git clone https://github.com/asoderlind/bandar-baat.git
+cd bandar-baat
 pnpm install
 ```
 
