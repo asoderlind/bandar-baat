@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { Volume2 } from "lucide-react";
 
 export function ReviewView() {
   const queryClient = useQueryClient();
@@ -11,11 +12,38 @@ export function ReviewView() {
   const [showAnswer, setShowAnswer] = useState(false);
   const [sessionComplete, setSessionComplete] = useState(false);
   const [correctCount, setCorrectCount] = useState(0);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [isLoadingAudio, setIsLoadingAudio] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const { data: reviews, isLoading } = useQuery({
     queryKey: ["reviews-due"],
     queryFn: () => api.getDueReviews(20),
   });
+
+  const playAudio = useCallback(async (text: string) => {
+    try {
+      setIsLoadingAudio(true);
+      const { audioUrl: url } = await api.synthesizeHindi(text);
+      const fullUrl = api.getAudioUrl(url.split("/").pop()!);
+      setAudioUrl(fullUrl);
+      if (audioRef.current) {
+        audioRef.current.src = fullUrl;
+        await audioRef.current.play();
+      }
+    } catch (err) {
+      console.error("Audio playback failed:", err);
+    } finally {
+      setIsLoadingAudio(false);
+    }
+  }, []);
+
+  // Auto-play audio when a new card is shown
+  useEffect(() => {
+    if (reviews && reviews[currentIndex]) {
+      playAudio(reviews[currentIndex].hindi);
+    }
+  }, [currentIndex, reviews, playAudio]);
 
   const submitMutation = useMutation({
     mutationFn: ({ wordId, quality }: { wordId: string; quality: number }) =>
@@ -100,31 +128,66 @@ export function ReviewView() {
       </div>
 
       {/* Review Card */}
-      <Card className="min-h-[300px]">
-        <CardContent className="pt-6 flex flex-col items-center justify-center min-h-[300px]">
+      <Card className="min-h-[350px]">
+        <CardContent className="pt-6 flex flex-col items-center min-h-[350px]">
+          {/* Hidden audio element */}
+          <audio ref={audioRef} />
+
           {!showAnswer ? (
             <>
-              <div className="hindi-large text-4xl text-center mb-8">
-                {currentReview.hindi}
+              <div className="flex-1 flex flex-col items-center justify-center w-full">
+                <div className="hindi-large text-4xl text-center mb-4">
+                  {currentReview.hindi}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="mb-4"
+                  onClick={() => playAudio(currentReview.hindi)}
+                  disabled={isLoadingAudio}
+                >
+                  <Volume2
+                    className={`h-6 w-6 ${isLoadingAudio ? "animate-pulse" : ""}`}
+                  />
+                </Button>
               </div>
-              <Button size="lg" onClick={() => setShowAnswer(true)}>
-                Show Answer
-              </Button>
+              <div className="w-full mt-auto">
+                <Button
+                  size="lg"
+                  className="w-full"
+                  onClick={() => setShowAnswer(true)}
+                >
+                  Show Answer
+                </Button>
+              </div>
             </>
           ) : (
             <>
-              <div className="hindi-large text-4xl text-center mb-2">
-                {currentReview.hindi}
-              </div>
-              <div className="text-lg text-muted-foreground mb-2">
-                {currentReview.romanized}
-              </div>
-              <div className="text-2xl font-medium mb-6">
-                {currentReview.english}
+              <div className="flex-1 flex flex-col items-center justify-center w-full">
+                <div className="hindi-large text-4xl text-center mb-2">
+                  {currentReview.hindi}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="mb-2"
+                  onClick={() => playAudio(currentReview.hindi)}
+                  disabled={isLoadingAudio}
+                >
+                  <Volume2
+                    className={`h-6 w-6 ${isLoadingAudio ? "animate-pulse" : ""}`}
+                  />
+                </Button>
+                <div className="text-lg text-muted-foreground mb-2">
+                  {currentReview.romanized}
+                </div>
+                <div className="text-2xl font-medium">
+                  {currentReview.english}
+                </div>
               </div>
 
               {/* Rating buttons (SM-2 quality scale) */}
-              <div className="grid grid-cols-4 gap-2 w-full">
+              <div className="grid grid-cols-4 gap-2 w-full mt-auto pt-6">
                 <Button
                   variant="destructive"
                   onClick={() =>
