@@ -260,7 +260,7 @@ class ApiClient {
   // TTS (Text-to-Speech)
   async synthesizeHindi(
     text: string,
-    options?: { slow?: boolean; voice?: string },
+    options?: { slow?: boolean; speakingRate?: number; voice?: string },
   ) {
     return this.request<{ cacheKey: string; audioUrl: string }>(
       "/tts/synthesize",
@@ -269,6 +269,7 @@ class ApiClient {
         body: JSON.stringify({
           text,
           slow: options?.slow,
+          speakingRate: options?.speakingRate,
           voice: options?.voice,
         }),
       },

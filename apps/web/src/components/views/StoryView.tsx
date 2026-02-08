@@ -91,12 +91,14 @@ export function StoryView() {
   // Audio playback state
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
   const [loadingAudio, setLoadingAudio] = useState<string | null>(null);
+  const [speakingRate, setSpeakingRate] = useState(1.0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Play audio for a word or sentence
+  // Play audio for a word, sentence, or full text
   const playAudio = useCallback(
-    async (text: string, slow?: boolean) => {
-      const audioKey = `${text}-${slow ? "slow" : "normal"}`;
+    async (text: string, opts?: { slow?: boolean; rate?: number }) => {
+      const effectiveRate = opts?.rate ?? (opts?.slow ? 0.75 : speakingRate);
+      const audioKey = `${text}-${effectiveRate}`;
 
       // Stop current audio if playing
       if (audioRef.current) {
@@ -110,7 +112,9 @@ export function StoryView() {
 
       setLoadingAudio(audioKey);
       try {
-        const result = await api.synthesizeHindi(text, { slow });
+        const result = await api.synthesizeHindi(text, {
+          speakingRate: effectiveRate,
+        });
         const audio = new Audio(result.audioUrl);
         audioRef.current = audio;
 
@@ -135,7 +139,7 @@ export function StoryView() {
         setPlayingAudio(null);
       }
     },
-    [playingAudio],
+    [playingAudio, speakingRate],
   );
 
   // Dictionary lookup for unannotated words
@@ -435,20 +439,37 @@ export function StoryView() {
               variant="outline"
               size="sm"
               className="gap-2"
-              onClick={() => playAudio(story.contentHindi, false)}
-              disabled={loadingAudio === `${story.contentHindi}-normal`}
+              onClick={() => playAudio(story.contentHindi)}
+              disabled={
+                loadingAudio === `${story.contentHindi}-${speakingRate}`
+              }
             >
-              {loadingAudio === `${story.contentHindi}-normal` ? (
+              {loadingAudio === `${story.contentHindi}-${speakingRate}` ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
-              ) : playingAudio === `${story.contentHindi}-normal` ? (
+              ) : playingAudio === `${story.contentHindi}-${speakingRate}` ? (
                 <VolumeX className="h-4 w-4" />
               ) : (
                 <Volume2 className="h-4 w-4" />
               )}
-              {playingAudio === `${story.contentHindi}-normal`
+              {playingAudio === `${story.contentHindi}-${speakingRate}`
                 ? "Stop"
                 : "Listen"}
             </Button>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground whitespace-nowrap">
+                Speed
+              </span>
+              <input
+                type="range"
+                min={0.5}
+                max={2}
+                step={0.25}
+                value={speakingRate}
+                onChange={(e) => setSpeakingRate(Number(e.target.value))}
+                className="w-20 accent-primary"
+              />
+              <span className="text-xs font-medium w-8">{speakingRate}×</span>
+            </div>
             <Tabs
               value={displayMode}
               onValueChange={(v) => setDisplayMode(v as typeof displayMode)}
@@ -468,6 +489,10 @@ export function StoryView() {
                 <StoryProse
                   sentences={story.sentences}
                   displayMode={displayMode}
+                  speakingRate={speakingRate}
+                  playingAudio={playingAudio}
+                  loadingAudio={loadingAudio}
+                  onPlaySentence={(text) => playAudio(text)}
                   onWordClick={(word) => {
                     setSelectedWord(word);
                     playAudio(word.hindi);
@@ -522,11 +547,15 @@ export function StoryView() {
                         e.stopPropagation();
                         playAudio(selectedWord.hindi);
                       }}
-                      disabled={loadingAudio === `${selectedWord.hindi}-normal`}
+                      disabled={
+                        loadingAudio === `${selectedWord.hindi}-${speakingRate}`
+                      }
                     >
-                      {loadingAudio === `${selectedWord.hindi}-normal` ? (
+                      {loadingAudio ===
+                      `${selectedWord.hindi}-${speakingRate}` ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : playingAudio === `${selectedWord.hindi}-normal` ? (
+                      ) : playingAudio ===
+                        `${selectedWord.hindi}-${speakingRate}` ? (
                         <VolumeX className="h-4 w-4" />
                       ) : (
                         <Volume2 className="h-4 w-4" />
@@ -735,10 +764,18 @@ export function StoryView() {
 function StoryProse({
   sentences,
   displayMode,
+  speakingRate,
+  playingAudio,
+  loadingAudio,
+  onPlaySentence,
   onWordClick,
 }: {
   sentences: StorySentence[];
   displayMode: "hindi" | "english";
+  speakingRate: number;
+  playingAudio: string | null;
+  loadingAudio: string | null;
+  onPlaySentence: (text: string) => void;
   onWordClick: (word: {
     hindi: string;
     romanized: string;
@@ -904,7 +941,23 @@ function StoryProse({
               className="text-lg hindi-text leading-relaxed mb-4"
             >
               {currentParagraph.map(({ sentence, index }) => (
-                <span key={index}>{renderClickableText(sentence)} </span>
+                <span key={index} className="inline-flex items-start gap-1">
+                  <button
+                    type="button"
+                    className="shrink-0 mt-1 text-muted-foreground hover:text-primary transition-colors"
+                    onClick={() => onPlaySentence(sentence.hindi)}
+                    title="Play sentence"
+                  >
+                    {loadingAudio === `${sentence.hindi}-${speakingRate}` ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : playingAudio === `${sentence.hindi}-${speakingRate}` ? (
+                      <VolumeX className="h-3.5 w-3.5" />
+                    ) : (
+                      <Volume2 className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                  <span>{renderClickableText(sentence)} </span>
+                </span>
               ))}
             </p>,
           );
@@ -915,9 +968,23 @@ function StoryProse({
         elements.push(
           <p
             key={i}
-            className="text-lg hindi-text leading-relaxed pl-4 border-l-2 border-primary/30 my-3"
+            className="text-lg hindi-text leading-relaxed pl-4 border-l-2 border-primary/30 my-3 flex items-start gap-1"
           >
-            {renderClickableText(sentence)}
+            <button
+              type="button"
+              className="shrink-0 mt-1 text-muted-foreground hover:text-primary transition-colors"
+              onClick={() => onPlaySentence(sentence.hindi)}
+              title="Play sentence"
+            >
+              {loadingAudio === `${sentence.hindi}-${speakingRate}` ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : playingAudio === `${sentence.hindi}-${speakingRate}` ? (
+                <VolumeX className="h-4 w-4" />
+              ) : (
+                <Volume2 className="h-4 w-4" />
+              )}
+            </button>
+            <span>{renderClickableText(sentence)}</span>
           </p>,
         );
       } else {
@@ -934,7 +1001,23 @@ function StoryProse({
           className="text-lg hindi-text leading-relaxed mb-4"
         >
           {currentParagraph.map(({ sentence, index }) => (
-            <span key={index}>{renderClickableText(sentence)} </span>
+            <span key={index} className="inline-flex items-start gap-1">
+              <button
+                type="button"
+                className="shrink-0 mt-1 text-muted-foreground hover:text-primary transition-colors"
+                onClick={() => onPlaySentence(sentence.hindi)}
+                title="Play sentence"
+              >
+                {loadingAudio === `${sentence.hindi}-${speakingRate}` ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : playingAudio === `${sentence.hindi}-${speakingRate}` ? (
+                  <VolumeX className="h-3.5 w-3.5" />
+                ) : (
+                  <Volume2 className="h-3.5 w-3.5" />
+                )}
+              </button>
+              <span>{renderClickableText(sentence)} </span>
+            </span>
           ))}
         </p>,
       );

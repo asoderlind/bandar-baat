@@ -4,7 +4,6 @@ import { z } from "zod";
 import { requireAuth, type AuthContext } from "../lib/middleware.js";
 import {
   synthesizeHindi,
-  synthesizeHindiSlow,
   HINDI_VOICES,
   audioObjectKey,
   type HindiVoice,
@@ -19,6 +18,7 @@ ttsRoutes.use("*", requireAuth);
 const synthesizeSchema = z.object({
   text: z.string().min(1).max(5000),
   slow: z.boolean().optional().default(false),
+  speakingRate: z.number().min(0.25).max(4.0).optional(),
   voice: z
     .enum([
       "hi-IN-Wavenet-A",
@@ -40,11 +40,13 @@ ttsRoutes.post(
   zValidator("json", synthesizeSchema),
   async (c) => {
     try {
-      const { text, slow, voice } = c.req.valid("json");
+      const { text, slow, speakingRate, voice } = c.req.valid("json");
 
-      const synthesizeFn = slow ? synthesizeHindiSlow : synthesizeHindi;
-      const { cacheKey } = await synthesizeFn(text, {
+      // speakingRate takes precedence; fall back to slow toggle
+      const rate = speakingRate ?? (slow ? 0.75 : undefined);
+      const { cacheKey } = await synthesizeHindi(text, {
         voice: voice as HindiVoice | undefined,
+        ...(rate !== undefined && { speakingRate: rate }),
       });
 
       return c.json({
@@ -110,6 +112,7 @@ ttsRoutes.get("/audio/:cacheKey", async (c) => {
 const batchSynthesizeSchema = z.object({
   sentences: z.array(z.string().min(1).max(2000)).min(1).max(50),
   slow: z.boolean().optional().default(false),
+  speakingRate: z.number().min(0.25).max(4.0).optional(),
   voice: z
     .enum([
       "hi-IN-Wavenet-A",
@@ -131,15 +134,16 @@ ttsRoutes.post(
   zValidator("json", batchSynthesizeSchema),
   async (c) => {
     try {
-      const { sentences, slow, voice } = c.req.valid("json");
+      const { sentences, slow, speakingRate, voice } = c.req.valid("json");
 
-      const synthesizeFn = slow ? synthesizeHindiSlow : synthesizeHindi;
+      const rate = speakingRate ?? (slow ? 0.75 : undefined);
 
       const results = await Promise.all(
         sentences.map(async (text, index) => {
           try {
-            const { cacheKey } = await synthesizeFn(text, {
+            const { cacheKey } = await synthesizeHindi(text, {
               voice: voice as HindiVoice | undefined,
+              ...(rate !== undefined && { speakingRate: rate }),
             });
             return {
               index,
