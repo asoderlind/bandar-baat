@@ -2,6 +2,12 @@
 
 A self-hosted web app for learning Hindi through AI-generated stories and exercises, built around the concept of **comprehensible input (Krashen's i+1)**. The system tracks your vocabulary and grammar knowledge, then uses Claude to generate personalized short stories that are mostly understandable but introduce a few new elements each session.
 
+## Screenshots
+
+<img width="1267" height="789" alt="image" src="https://github.com/user-attachments/assets/0742e20d-2a8f-4036-9893-ad9fc3927414" />
+<img width="998" height="779" alt="image" src="https://github.com/user-attachments/assets/e0bdd25b-efea-4f76-b104-3c2f3da9df4a" />
+
+
 ## Why?
 
 Traditional flashcard apps drill isolated words. Immersion content is overwhelming for beginners. Kahani sits in the gap — every piece of content is personalized to be just at the edge of your ability, with full context.
