@@ -1,8 +1,6 @@
 name: Build and Deploy
 
 on:
-  push:
-    branches: [main, master]
   workflow_dispatch:
   release:
     types: [published]
@@ -38,7 +36,8 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository }}-api
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest
+            type=semver,pattern={{version}}
             type=sha,prefix=
 
       - name: Build and push API image
@@ -59,7 +58,8 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository }}-web
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest
+            type=semver,pattern={{version}}
             type=sha,prefix=
 
       - name: Build and push Web image
