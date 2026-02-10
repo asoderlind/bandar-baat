@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import { DEFAULT_NEW_WORDS_PER_STORY } from "@monke-say/shared";
+
 import { Volume2, VolumeX, Loader2 } from "lucide-react";
 
 type StoryStep = "preview" | "read" | "exercises" | "complete";
@@ -74,7 +74,6 @@ export function StoryView() {
     feedback?: string;
   } | null>(null);
   const [topic, setTopic] = useState("");
-  const [newWordCount, setNewWordCount] = useState(DEFAULT_NEW_WORDS_PER_STORY);
   const [storyMode, setStoryMode] = useState<"generate" | "import">("generate");
   const [importText, setImportText] = useState("");
 
@@ -244,7 +243,7 @@ export function StoryView() {
 
   // Generate story mutation
   const generateMutation = useMutation({
-    mutationFn: (params: { topic?: string; newWordCount?: number }) =>
+    mutationFn: (params: { topic?: string }) =>
       api.generateStory(params),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["stories"] });
@@ -331,29 +330,11 @@ export function StoryView() {
                     onChange={(e) => setTopic(e.target.value)}
                   />
                 </div>
-                <div>
-                  <label className="text-sm font-medium mb-2 block">
-                    New words per story: {newWordCount}
-                  </label>
-                  <input
-                    type="range"
-                    min={1}
-                    max={8}
-                    value={newWordCount}
-                    onChange={(e) => setNewWordCount(Number(e.target.value))}
-                    className="w-full accent-primary"
-                  />
-                  <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                    <span>1 (easier)</span>
-                    <span>8 (more challenge)</span>
-                  </div>
-                </div>
                 <Button
                   className="w-full"
                   onClick={() =>
                     generateMutation.mutate({
                       topic: topic || undefined,
-                      newWordCount,
                     })
                   }
                   disabled={generateMutation.isPending}

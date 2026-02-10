@@ -382,7 +382,6 @@ const generateStorySchema = z.object({
   includeWordIds: z.array(z.string()).optional(),
   focusGrammarId: z.string().optional(),
   difficultyOverride: z.enum(["A1", "A2", "B1", "B2"]).optional(),
-  newWordCount: z.number().int().min(1).max(8).optional(),
 });
 
 /**
@@ -404,33 +403,7 @@ storiesRoutes.post(
       const knownWords = await getKnownWords(user.id);
       const grammar = await getActiveGrammar(user.id);
 
-      // Get new words to introduce
-      const wordLimit = request.newWordCount ?? DEFAULT_NEW_WORDS_PER_STORY;
-      const knownWordIds = knownWords.map((w) => w.id);
-      const newWordsQuery =
-        knownWordIds.length > 0
-          ? db
-              .select()
-              .from(words)
-              .where(
-                and(
-                  eq(words.cefrLevel, level),
-                  notInArray(words.id, knownWordIds),
-                ),
-              )
-              .limit(wordLimit)
-          : db
-              .select()
-              .from(words)
-              .where(eq(words.cefrLevel, level))
-              .limit(wordLimit);
-
-      const newWords = await newWordsQuery;
-
       const knownVocabStr = formatKnownVocabStr(knownWords);
-      const newVocabStr = newWords
-        .map((w) => `- ${w.hindi} (${w.romanized}) — ${w.english}`)
-        .join("\n");
       const grammarStr = formatGrammarStr(grammar);
       const topic = request.topic || "daily life";
 
@@ -503,7 +476,6 @@ storiesRoutes.post(
         level,
         topic,
         knownVocabulary: knownVocabStr,
-        newVocabulary: newVocabStr,
         grammarConcepts: grammarStr,
         characters: characterStr || undefined,
       });
@@ -515,7 +487,7 @@ storiesRoutes.post(
 
       const message = await anthropic.messages.create({
         model: "claude-sonnet-4-20250514",
-        max_tokens: 8192,
+        max_tokens: 16384,
         messages: [{ role: "user", content: prompt }],
       });
 
@@ -542,6 +514,75 @@ storiesRoutes.post(
       // Grammar & cohesion validation pass
       await runValidationPass(anthropic, storyData, level, topic);
 
+      // Post-generation word matching: find words marked isNew by Claude
+      const genNewWordSet = new Map<
+        string,
+        { hindi: string; romanized: string; english: string; partOfSpeech?: string }
+      >();
+      for (const sentence of storyData.sentences || []) {
+        for (const word of sentence.words || []) {
+          if (word.isNew && !genNewWordSet.has(word.hindi)) {
+            genNewWordSet.set(word.hindi, word);
+          }
+        }
+      }
+
+      const generatedNewWordIds: string[] = [];
+      const validPOS = new Set([
+        "NOUN", "VERB", "ADJECTIVE", "ADVERB",
+        "POSTPOSITION", "PARTICLE", "PRONOUN", "CONJUNCTION",
+      ]);
+
+      for (const [hindi, wordInfo] of genNewWordSet) {
+        const [dbWord] = await db
+          .select()
+          .from(words)
+          .where(eq(words.hindi, hindi))
+          .limit(1);
+
+        if (dbWord) {
+          const [existingUserWord] = await db
+            .select()
+            .from(userWords)
+            .where(
+              and(
+                eq(userWords.userId, user.id),
+                eq(userWords.wordId, dbWord.id),
+                inArray(userWords.status, ["KNOWN", "MASTERED"]),
+              ),
+            );
+
+          if (existingUserWord) {
+            for (const s of storyData.sentences || []) {
+              for (const w of s.words || []) {
+                if (w.hindi === hindi) w.isNew = false;
+              }
+            }
+          } else {
+            generatedNewWordIds.push(dbWord.id);
+          }
+        } else {
+          const rawPos = wordInfo.partOfSpeech?.toUpperCase() ?? "";
+          const pos = validPOS.has(rawPos) ? rawPos : "NOUN";
+          try {
+            const [newWord] = await db
+              .insert(words)
+              .values({
+                hindi: wordInfo.hindi,
+                romanized: wordInfo.romanized || "",
+                english: wordInfo.english || "",
+                partOfSpeech: pos as any,
+                cefrLevel: level,
+                tags: ["generated"],
+              })
+              .returning();
+            generatedNewWordIds.push(newWord.id);
+          } catch (insertError) {
+            console.warn(`Failed to insert word "${hindi}":`, insertError);
+          }
+        }
+      }
+
       // Create story in database
       const [story] = await db
         .insert(stories)
@@ -552,7 +593,7 @@ storiesRoutes.post(
           contentRomanized: storyData.content_romanized || "",
           contentEnglish: storyData.content_english || "",
           sentencesJson: storyData.sentences || [],
-          targetNewWordIds: newWords.map((w) => w.id),
+          targetNewWordIds: generatedNewWordIds,
           targetGrammarIds: grammar.map((g) => g.id),
           topic,
           difficultyLevel: level,
@@ -689,7 +730,7 @@ storiesRoutes.post(
       // Word matching: compare Claude's isNew annotations against the DB
       const newWordHindiSet = new Map<
         string,
-        { hindi: string; romanized: string; english: string }
+        { hindi: string; romanized: string; english: string; partOfSpeech?: string }
       >();
       for (const sentence of storyData.sentences || []) {
         for (const word of sentence.words || []) {
@@ -700,8 +741,12 @@ storiesRoutes.post(
       }
 
       const matchedNewWordIds: string[] = [];
+      const validPartOfSpeech = new Set([
+        "NOUN", "VERB", "ADJECTIVE", "ADVERB",
+        "POSTPOSITION", "PARTICLE", "PRONOUN", "CONJUNCTION",
+      ]);
 
-      for (const [hindi] of newWordHindiSet) {
+      for (const [hindi, wordInfo] of newWordHindiSet) {
         const [dbWord] = await db
           .select()
           .from(words)
@@ -732,8 +777,27 @@ storiesRoutes.post(
             // Word exists in DB but user doesn't know it yet
             matchedNewWordIds.push(dbWord.id);
           }
+        } else {
+          // Word not in DB — auto-create it from Claude's annotations
+          const rawPos = wordInfo.partOfSpeech?.toUpperCase() ?? "";
+          const pos = validPartOfSpeech.has(rawPos) ? rawPos : "NOUN";
+          try {
+            const [newWord] = await db
+              .insert(words)
+              .values({
+                hindi: wordInfo.hindi,
+                romanized: wordInfo.romanized || "",
+                english: wordInfo.english || "",
+                partOfSpeech: pos as any,
+                cefrLevel: level,
+                tags: ["imported"],
+              })
+              .returning();
+            matchedNewWordIds.push(newWord.id);
+          } catch (insertError) {
+            console.warn(`Failed to insert word "${hindi}":`, insertError);
+          }
         }
-        // Words not in DB stay marked isNew for highlighting but aren't tracked
       }
 
       // Skip validation pass for imported stories — we preserve the original text

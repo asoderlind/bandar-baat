@@ -8,7 +8,6 @@ export interface StoryGenerationContext {
   level: CEFRLevel;
   topic: string;
   knownVocabulary: string;
-  newVocabulary: string;
   grammarConcepts: string;
   characters?: string;
 }
@@ -31,15 +30,11 @@ The story should be dialogue-heavy — at least 60-70% of the content should be 
 TOPIC/THEME: ${topic}`;
 }
 
-function vocabularySection(
-  knownVocabulary: string,
-  newVocabulary: string,
-): string {
+function vocabularySection(knownVocabulary: string): string {
   return `KNOWN VOCABULARY (the learner can read these comfortably):
 ${knownVocabulary || "Basic greetings, pronouns, and common verbs"}
 
-NEW WORDS TO TEACH (incorporate naturally — see rules below):
-${newVocabulary}`;
+You may freely introduce new words beyond this list as the story requires. Any word NOT in the known vocabulary list above should be marked with "isNew": true in the word annotations.`;
 }
 
 function grammarSection(grammarConcepts: string): string {
@@ -68,11 +63,11 @@ function styleGuidelinesSection(): string {
 }
 
 function newWordRulesSection(): string {
-  return `NEW WORD USAGE RULES:
-- Integrate new words ONLY when they fit the story naturally
-- It is perfectly fine to use a new word just once if forcing a second use would feel unnatural
-- NEVER insert random unrelated actions (e.g. "he drank water", "she read a book") just to practise a word — if a word doesn't fit the story, skip it
-- The story's coherence is more important than word coverage`;
+  return `NEW WORD RULES:
+- Introduce new vocabulary naturally as the story requires — do not force words that don't fit
+- NEVER insert random unrelated actions just to use a word
+- The story's coherence is more important than introducing many new words
+- Mark every word NOT in the known vocabulary list as "isNew": true in the sentence word annotations`;
 }
 
 function hindiGrammarRulesSection(): string {
@@ -93,7 +88,7 @@ function hindiGrammarRulesSection(): string {
 
 function languageConstraintsSection(level: string): string {
   return `LANGUAGE CONSTRAINTS:
-- Use only known vocabulary + new words (proper nouns like names are OK)
+- Use primarily known vocabulary, introducing new words naturally (proper nouns like names are OK)
 - Keep individual sentences clear, but let them build on each other
 - Match complexity to ${level} level`;
 }
@@ -169,7 +164,7 @@ export function buildStoryGenerationPrompt(
   const sections = [
     roleSection(),
     taskSection(ctx.level, ctx.topic),
-    vocabularySection(ctx.knownVocabulary, ctx.newVocabulary),
+    vocabularySection(ctx.knownVocabulary),
     grammarSection(ctx.grammarConcepts),
     characterSectionBuilder(ctx.characters),
     styleGuidelinesSection(),

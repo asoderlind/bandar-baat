@@ -23,16 +23,6 @@ export function VocabularyView() {
       }),
   });
 
-  const groupedByLevel = words?.reduce(
-    (acc, word) => {
-      const level = word.cefrLevel;
-      if (!acc[level]) acc[level] = [];
-      acc[level].push(word);
-      return acc;
-    },
-    {} as Record<string, typeof words>,
-  );
-
   return (
     <div className="space-y-6">
       <div>
@@ -73,38 +63,15 @@ export function VocabularyView() {
           <p className="text-muted-foreground">No words found</p>
         </div>
       ) : (
-        <div className="space-y-8">
-          {(["A1", "A2", "B1", "B2"] as const).map((level) => {
-            const levelWords = groupedByLevel?.[level];
-            if (!levelWords || levelWords.length === 0) return null;
-
-            return (
-              <div key={level}>
-                <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                  <span
-                    className={cn(
-                      "px-2 py-0.5 rounded text-xs font-medium",
-                      level === "A1" && "bg-green-100 text-green-800",
-                      level === "A2" && "bg-blue-100 text-blue-800",
-                      level === "B1" && "bg-yellow-100 text-yellow-800",
-                      level === "B2" && "bg-red-100 text-red-800",
-                    )}
-                  >
-                    {level}
-                  </span>
-                  <span className="text-muted-foreground font-normal">
-                    ({levelWords.length} words)
-                  </span>
-                </h2>
-
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {levelWords.map((word) => (
-                    <WordCard key={word.id} word={word} />
-                  ))}
-                </div>
-              </div>
-            );
-          })}
+        <div>
+          <p className="text-sm text-muted-foreground mb-4">
+            {words.length} words
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {words.map((word) => (
+              <WordCard key={word.id} word={word} />
+            ))}
+          </div>
         </div>
       )}
     </div>
