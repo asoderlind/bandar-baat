@@ -15,6 +15,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { requireAuth, type AuthContext } from "../lib/middleware.js";
 import {
   buildStoryGenerationPrompt,
+  buildStoryImportPrompt,
   buildStoryValidationPrompt,
 } from "../lib/prompts.js";
 import { DEFAULT_NEW_WORDS_PER_STORY } from "@monke-say/shared";
@@ -36,6 +37,227 @@ export const storiesRoutes = new Hono<{ Variables: AuthContext }>();
 
 // All routes require authentication
 storiesRoutes.use("*", requireAuth);
+
+// ── Shared helpers ──────────────────────────────────────────
+
+async function determineUserLevel(
+  userId: string,
+  override?: CEFRLevel,
+): Promise<CEFRLevel> {
+  if (override) return override;
+  const result = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(userWords)
+    .where(
+      and(
+        eq(userWords.userId, userId),
+        inArray(userWords.status, ["KNOWN", "MASTERED"]),
+      ),
+    );
+  const wordsKnown = Number(result[0]?.count || 0);
+  if (wordsKnown < 50) return "A1";
+  if (wordsKnown < 150) return "A2";
+  if (wordsKnown < 400) return "B1";
+  return "B2";
+}
+
+async function getKnownWords(userId: string) {
+  const results = await db
+    .select({ word: words })
+    .from(userWords)
+    .innerJoin(words, eq(userWords.wordId, words.id))
+    .where(
+      and(
+        eq(userWords.userId, userId),
+        inArray(userWords.status, ["KNOWN", "MASTERED", "LEARNING"]),
+      ),
+    )
+    .limit(300);
+  return results.map((r) => r.word);
+}
+
+async function getActiveGrammar(userId: string) {
+  const results = await db
+    .select({ grammar: grammarConcepts })
+    .from(userGrammars)
+    .innerJoin(
+      grammarConcepts,
+      eq(userGrammars.grammarConceptId, grammarConcepts.id),
+    )
+    .where(
+      and(
+        eq(userGrammars.userId, userId),
+        inArray(userGrammars.status, ["LEARNING", "AVAILABLE"]),
+      ),
+    )
+    .orderBy(grammarConcepts.sortOrder)
+    .limit(2);
+  return results.map((r) => r.grammar);
+}
+
+function formatKnownVocabStr(
+  knownWords: (typeof words.$inferSelect)[],
+): string {
+  return knownWords
+    .slice(0, 200)
+    .map((w) => `- ${w.hindi} (${w.romanized}) — ${w.english}`)
+    .join("\n");
+}
+
+function formatGrammarStr(
+  grammar: (typeof grammarConcepts.$inferSelect)[],
+): string {
+  return grammar.length > 0
+    ? grammar.map((g) => `- ${g.name}: ${g.description}`).join("\n")
+    : "Basic sentence structure";
+}
+
+function parseClaudeJsonResponse(responseText: string): any {
+  let jsonText = responseText.trim();
+  jsonText = jsonText.replace(/^```(?:json)?\s*\n?/i, "");
+  jsonText = jsonText.replace(/\n?```\s*$/i, "");
+  jsonText = jsonText.trim();
+
+  let braceCount = 0;
+  let startIdx = -1;
+  let endIdx = -1;
+
+  for (let i = 0; i < jsonText.length; i++) {
+    if (jsonText[i] === "{") {
+      if (startIdx === -1) startIdx = i;
+      braceCount++;
+    } else if (jsonText[i] === "}") {
+      braceCount--;
+      if (braceCount === 0 && startIdx !== -1) {
+        endIdx = i;
+        break;
+      }
+    }
+  }
+
+  if (startIdx !== -1 && endIdx !== -1) {
+    jsonText = jsonText.slice(startIdx, endIdx + 1);
+  }
+
+  return JSON.parse(jsonText);
+}
+
+function formatStoryResponse(
+  story: typeof stories.$inferSelect,
+  storyExercises: (typeof exercises.$inferSelect)[],
+) {
+  return {
+    id: story.id,
+    title: story.title,
+    contentHindi: story.contentHindi,
+    contentRomanized: story.contentRomanized,
+    contentEnglish: story.contentEnglish,
+    sentences: story.sentencesJson as StorySentence[],
+    targetNewWordIds: story.targetNewWordIds || [],
+    targetGrammarIds: story.targetGrammarIds || [],
+    topic: story.topic,
+    difficultyLevel: story.difficultyLevel,
+    wordCount: story.wordCount,
+    rating: story.rating,
+    createdAt: story.createdAt.toISOString(),
+    completedAt: story.completedAt?.toISOString(),
+    exercises: storyExercises.map((ex) => ({
+      id: ex.id,
+      storyId: ex.storyId,
+      type: ex.type,
+      question: ex.questionJson,
+      correctAnswer: ex.correctAnswer,
+      options: ex.options,
+      createdAt: ex.createdAt.toISOString(),
+    })),
+  };
+}
+
+async function runValidationPass(
+  anthropic: Anthropic,
+  storyData: any,
+  level: CEFRLevel,
+  topic: string,
+) {
+  if (!storyData.content_hindi || !storyData.content_english) return;
+
+  try {
+    const validationPrompt = buildStoryValidationPrompt({
+      storyHindi: storyData.content_hindi,
+      storyEnglish: storyData.content_english,
+      level,
+      topic,
+    });
+
+    const validationMessage = await anthropic.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 8192,
+      messages: [{ role: "user", content: validationPrompt }],
+    });
+
+    const validationText =
+      validationMessage.content[0].type === "text"
+        ? validationMessage.content[0].text
+        : "";
+
+    let validationResult: any;
+    try {
+      validationResult = parseClaudeJsonResponse(validationText);
+    } catch {
+      console.warn("Validation JSON parse failed, skipping corrections");
+      return;
+    }
+
+    if (validationResult?.hasIssues) {
+      console.log(
+        `Story validation found ${validationResult.issues?.length || 0} issues — applying corrections`,
+      );
+      if (validationResult.corrected_hindi) {
+        storyData.content_hindi = validationResult.corrected_hindi;
+      }
+      if (validationResult.corrected_romanized) {
+        storyData.content_romanized = validationResult.corrected_romanized;
+      }
+      if (validationResult.corrected_english) {
+        storyData.content_english = validationResult.corrected_english;
+      }
+      if (
+        validationResult.corrected_sentences &&
+        Array.isArray(validationResult.corrected_sentences) &&
+        storyData.sentences
+      ) {
+        for (const corrected of validationResult.corrected_sentences) {
+          if (corrected.changed && storyData.sentences[corrected.index]) {
+            const original = storyData.sentences[corrected.index];
+            original.hindi = corrected.hindi || original.hindi;
+            original.romanized = corrected.romanized || original.romanized;
+            original.english = corrected.english || original.english;
+          }
+        }
+      }
+    } else {
+      console.log("Story validation passed — no issues found");
+    }
+  } catch (validationError) {
+    console.warn(
+      "Grammar/cohesion validation failed, using original story:",
+      validationError,
+    );
+  }
+}
+
+async function createExercises(storyId: string, exercisesData: any[]) {
+  for (const exerciseData of exercisesData || []) {
+    await db.insert(exercises).values({
+      storyId,
+      type: exerciseData.type as ExerciseType,
+      questionJson: exerciseData.question,
+      correctAnswer: exerciseData.correctAnswer || exerciseData.correct_answer,
+      options: exerciseData.options,
+    });
+  }
+  return db.select().from(exercises).where(eq(exercises.storyId, storyId));
+}
 
 /**
  * GET /api/stories
@@ -175,40 +397,12 @@ storiesRoutes.post(
       const user = c.get("user");
       const request = c.req.valid("json");
 
-      // Determine difficulty level
-      let level = request.difficultyOverride;
-      if (!level) {
-        const knownWordsResult = await db
-          .select({ count: sql<number>`count(*)` })
-          .from(userWords)
-          .where(
-            and(
-              eq(userWords.userId, user.id),
-              inArray(userWords.status, ["KNOWN", "MASTERED"]),
-            ),
-          );
-        const wordsKnown = Number(knownWordsResult[0]?.count || 0);
-
-        if (wordsKnown < 50) level = "A1";
-        else if (wordsKnown < 150) level = "A2";
-        else if (wordsKnown < 400) level = "B1";
-        else level = "B2";
-      }
-
-      // Get known vocabulary
-      const knownWordsResult = await db
-        .select({ word: words })
-        .from(userWords)
-        .innerJoin(words, eq(userWords.wordId, words.id))
-        .where(
-          and(
-            eq(userWords.userId, user.id),
-            inArray(userWords.status, ["KNOWN", "MASTERED", "LEARNING"]),
-          ),
-        )
-        .limit(300);
-
-      const knownWords = knownWordsResult.map((r) => r.word);
+      const level = await determineUserLevel(
+        user.id,
+        request.difficultyOverride,
+      );
+      const knownWords = await getKnownWords(user.id);
+      const grammar = await getActiveGrammar(user.id);
 
       // Get new words to introduce
       const wordLimit = request.newWordCount ?? DEFAULT_NEW_WORDS_PER_STORY;
@@ -233,40 +427,11 @@ storiesRoutes.post(
 
       const newWords = await newWordsQuery;
 
-      // Get grammar concepts
-      const grammarResults = await db
-        .select({ grammar: grammarConcepts })
-        .from(userGrammars)
-        .innerJoin(
-          grammarConcepts,
-          eq(userGrammars.grammarConceptId, grammarConcepts.id),
-        )
-        .where(
-          and(
-            eq(userGrammars.userId, user.id),
-            inArray(userGrammars.status, ["LEARNING", "AVAILABLE"]),
-          ),
-        )
-        .orderBy(grammarConcepts.sortOrder)
-        .limit(2);
-
-      const grammar = grammarResults.map((r) => r.grammar);
-
-      // Build prompt
-      const knownVocabStr = knownWords
-        .slice(0, 200)
-        .map((w) => `- ${w.hindi} (${w.romanized}) — ${w.english}`)
-        .join("\n");
-
+      const knownVocabStr = formatKnownVocabStr(knownWords);
       const newVocabStr = newWords
         .map((w) => `- ${w.hindi} (${w.romanized}) — ${w.english}`)
         .join("\n");
-
-      const grammarStr =
-        grammar.length > 0
-          ? grammar.map((g) => `- ${g.name}: ${g.description}`).join("\n")
-          : "Basic sentence structure";
-
+      const grammarStr = formatGrammarStr(grammar);
       const topic = request.topic || "daily life";
 
       // Get user's recurring characters for story continuity
@@ -316,7 +481,6 @@ storiesRoutes.post(
               desc += ` — ${char.personalityTraits.slice(0, 3).join(", ")}`;
             }
 
-            // Add relationships
             const rels = relationshipsData.filter(
               (r) => r.relationship.characterId === char.id,
             );
@@ -335,7 +499,6 @@ storiesRoutes.post(
           .join("\n");
       }
 
-      // Build prompt using the factored-out function
       const prompt = buildStoryGenerationPrompt({
         level,
         topic,
@@ -359,41 +522,9 @@ storiesRoutes.post(
       const responseText =
         message.content[0].type === "text" ? message.content[0].text : "";
 
-      // Parse response
       let storyData: any;
       try {
-        let jsonText = responseText.trim();
-
-        // Remove markdown code blocks more aggressively
-        // Handle ```json or just ``` at start
-        jsonText = jsonText.replace(/^```(?:json)?\s*\n?/i, "");
-        // Handle trailing ```
-        jsonText = jsonText.replace(/\n?```\s*$/i, "");
-        jsonText = jsonText.trim();
-
-        // Find the outermost JSON object
-        let braceCount = 0;
-        let startIdx = -1;
-        let endIdx = -1;
-
-        for (let i = 0; i < jsonText.length; i++) {
-          if (jsonText[i] === "{") {
-            if (startIdx === -1) startIdx = i;
-            braceCount++;
-          } else if (jsonText[i] === "}") {
-            braceCount--;
-            if (braceCount === 0 && startIdx !== -1) {
-              endIdx = i;
-              break;
-            }
-          }
-        }
-
-        if (startIdx !== -1 && endIdx !== -1) {
-          jsonText = jsonText.slice(startIdx, endIdx + 1);
-        }
-
-        storyData = JSON.parse(jsonText);
+        storyData = parseClaudeJsonResponse(responseText);
       } catch (parseError) {
         console.error("JSON parse error:", parseError);
         console.error("Raw response:", responseText.substring(0, 500));
@@ -408,100 +539,8 @@ storiesRoutes.post(
         };
       }
 
-      // ── Grammar & cohesion validation pass ──────────────────
-      if (storyData.content_hindi && storyData.content_english) {
-        try {
-          const validationPrompt = buildStoryValidationPrompt({
-            storyHindi: storyData.content_hindi,
-            storyEnglish: storyData.content_english,
-            level,
-            topic,
-          });
-
-          const validationMessage = await anthropic.messages.create({
-            model: "claude-sonnet-4-20250514",
-            max_tokens: 8192,
-            messages: [{ role: "user", content: validationPrompt }],
-          });
-
-          const validationText =
-            validationMessage.content[0].type === "text"
-              ? validationMessage.content[0].text
-              : "";
-
-          let validationResult: any;
-          try {
-            let vjson = validationText.trim();
-            vjson = vjson.replace(/^```(?:json)?\s*\n?/i, "");
-            vjson = vjson.replace(/\n?```\s*$/i, "");
-            vjson = vjson.trim();
-
-            let vBrace = 0,
-              vStart = -1,
-              vEnd = -1;
-            for (let i = 0; i < vjson.length; i++) {
-              if (vjson[i] === "{") {
-                if (vStart === -1) vStart = i;
-                vBrace++;
-              } else if (vjson[i] === "}") {
-                vBrace--;
-                if (vBrace === 0 && vStart !== -1) {
-                  vEnd = i;
-                  break;
-                }
-              }
-            }
-            if (vStart !== -1 && vEnd !== -1) {
-              vjson = vjson.slice(vStart, vEnd + 1);
-            }
-            validationResult = JSON.parse(vjson);
-          } catch {
-            console.warn("Validation JSON parse failed, skipping corrections");
-            validationResult = null;
-          }
-
-          if (validationResult?.hasIssues) {
-            console.log(
-              `Story validation found ${validationResult.issues?.length || 0} issues — applying corrections`,
-            );
-            // Apply corrected content
-            if (validationResult.corrected_hindi) {
-              storyData.content_hindi = validationResult.corrected_hindi;
-            }
-            if (validationResult.corrected_romanized) {
-              storyData.content_romanized =
-                validationResult.corrected_romanized;
-            }
-            if (validationResult.corrected_english) {
-              storyData.content_english = validationResult.corrected_english;
-            }
-            // Merge corrected sentences
-            if (
-              validationResult.corrected_sentences &&
-              Array.isArray(validationResult.corrected_sentences) &&
-              storyData.sentences
-            ) {
-              for (const corrected of validationResult.corrected_sentences) {
-                if (corrected.changed && storyData.sentences[corrected.index]) {
-                  const original = storyData.sentences[corrected.index];
-                  original.hindi = corrected.hindi || original.hindi;
-                  original.romanized =
-                    corrected.romanized || original.romanized;
-                  original.english = corrected.english || original.english;
-                }
-              }
-            }
-          } else {
-            console.log("Story validation passed — no issues found");
-          }
-        } catch (validationError) {
-          console.warn(
-            "Grammar/cohesion validation failed, using original story:",
-            validationError,
-          );
-          // Non-fatal: we keep the original story
-        }
-      }
+      // Grammar & cohesion validation pass
+      await runValidationPass(anthropic, storyData, level, topic);
 
       // Create story in database
       const [story] = await db
@@ -525,16 +564,10 @@ storiesRoutes.post(
         .returning();
 
       // Create exercises
-      for (const exerciseData of storyData.exercises || []) {
-        await db.insert(exercises).values({
-          storyId: story.id,
-          type: exerciseData.type as ExerciseType,
-          questionJson: exerciseData.question,
-          correctAnswer:
-            exerciseData.correctAnswer || exerciseData.correct_answer,
-          options: exerciseData.options,
-        });
-      }
+      const createdExercises = await createExercises(
+        story.id,
+        storyData.exercises,
+      );
 
       // Link characters used in the story and update appearance counts
       if (
@@ -542,7 +575,6 @@ storiesRoutes.post(
         Array.isArray(storyData.characters_used)
       ) {
         for (const charUsed of storyData.characters_used) {
-          // Find matching character by name
           const matchedChar = userCharacters.find(
             (c) =>
               c.character.nameRomanized.toLowerCase() ===
@@ -551,14 +583,12 @@ storiesRoutes.post(
           );
 
           if (matchedChar) {
-            // Link character to story
             await db.insert(storyCharacters).values({
               storyId: story.id,
               characterId: matchedChar.character.id,
               roleInStory: charUsed.role || null,
             });
 
-            // Update appearance count
             await db
               .update(characters)
               .set({
@@ -570,39 +600,9 @@ storiesRoutes.post(
         }
       }
 
-      // Fetch created exercises
-      const createdExercises = await db
-        .select()
-        .from(exercises)
-        .where(eq(exercises.storyId, story.id));
-
       return c.json({
         success: true,
-        data: {
-          id: story.id,
-          title: story.title,
-          contentHindi: story.contentHindi,
-          contentRomanized: story.contentRomanized,
-          contentEnglish: story.contentEnglish,
-          sentences: story.sentencesJson as StorySentence[],
-          targetNewWordIds: story.targetNewWordIds || [],
-          targetGrammarIds: story.targetGrammarIds || [],
-          topic: story.topic,
-          difficultyLevel: story.difficultyLevel,
-          wordCount: story.wordCount,
-          rating: story.rating,
-          createdAt: story.createdAt.toISOString(),
-          completedAt: story.completedAt?.toISOString(),
-          exercises: createdExercises.map((ex) => ({
-            id: ex.id,
-            storyId: ex.storyId,
-            type: ex.type,
-            question: ex.questionJson,
-            correctAnswer: ex.correctAnswer,
-            options: ex.options,
-            createdAt: ex.createdAt.toISOString(),
-          })),
-        },
+        data: formatStoryResponse(story, createdExercises),
       });
     } catch (error) {
       console.error("Story generation error:", error);
@@ -613,6 +613,172 @@ storiesRoutes.post(
           {
             success: false,
             error: "Story generation service temporarily unavailable",
+          },
+          503,
+        );
+      }
+
+      return c.json({ success: false, error: message }, 500);
+    }
+  },
+);
+
+const importStorySchema = z.object({
+  text: z.string().min(10).max(10000),
+  topic: z.string().optional(),
+});
+
+/**
+ * POST /api/stories/import
+ * Import and process a Hindi story using Claude
+ */
+storiesRoutes.post(
+  "/import",
+  zValidator("json", importStorySchema),
+  async (c) => {
+    try {
+      const user = c.get("user");
+      const request = c.req.valid("json");
+
+      const level = await determineUserLevel(user.id);
+      const knownWords = await getKnownWords(user.id);
+      const grammar = await getActiveGrammar(user.id);
+
+      const knownVocabStr = formatKnownVocabStr(knownWords);
+      const grammarStr = formatGrammarStr(grammar);
+      const topic = request.topic || "imported";
+
+      const prompt = buildStoryImportPrompt({
+        level,
+        importedText: request.text,
+        knownVocabulary: knownVocabStr,
+        grammarConcepts: grammarStr,
+      });
+
+      // Call Claude API
+      const anthropic = new Anthropic({
+        apiKey: process.env.ANTHROPIC_API_KEY,
+      });
+
+      const message = await anthropic.messages.create({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 16384,
+        messages: [{ role: "user", content: prompt }],
+      });
+
+      const responseText =
+        message.content[0].type === "text" ? message.content[0].text : "";
+
+      let storyData: any;
+      try {
+        storyData = parseClaudeJsonResponse(responseText);
+      } catch (parseError) {
+        console.error("Import JSON parse error:", parseError);
+        console.error("Raw response:", responseText.substring(0, 500));
+        storyData = {
+          title: "Imported Story",
+          content_hindi: request.text,
+          content_romanized: "",
+          content_english: "",
+          word_count: 0,
+          sentences: [],
+          exercises: [],
+        };
+      }
+
+      // Word matching: compare Claude's isNew annotations against the DB
+      const newWordHindiSet = new Map<
+        string,
+        { hindi: string; romanized: string; english: string }
+      >();
+      for (const sentence of storyData.sentences || []) {
+        for (const word of sentence.words || []) {
+          if (word.isNew && !newWordHindiSet.has(word.hindi)) {
+            newWordHindiSet.set(word.hindi, word);
+          }
+        }
+      }
+
+      const matchedNewWordIds: string[] = [];
+
+      for (const [hindi] of newWordHindiSet) {
+        const [dbWord] = await db
+          .select()
+          .from(words)
+          .where(eq(words.hindi, hindi))
+          .limit(1);
+
+        if (dbWord) {
+          // Check if user already knows this word
+          const [existingUserWord] = await db
+            .select()
+            .from(userWords)
+            .where(
+              and(
+                eq(userWords.userId, user.id),
+                eq(userWords.wordId, dbWord.id),
+                inArray(userWords.status, ["KNOWN", "MASTERED"]),
+              ),
+            );
+
+          if (existingUserWord) {
+            // User already knows it — unmark isNew in sentence data
+            for (const sentence of storyData.sentences || []) {
+              for (const w of sentence.words || []) {
+                if (w.hindi === hindi) w.isNew = false;
+              }
+            }
+          } else {
+            // Word exists in DB but user doesn't know it yet
+            matchedNewWordIds.push(dbWord.id);
+          }
+        }
+        // Words not in DB stay marked isNew for highlighting but aren't tracked
+      }
+
+      // Skip validation pass for imported stories — we preserve the original text
+      // and should not let the validator rewrite/paraphrase user-provided content.
+
+      // Create story in database
+      const [story] = await db
+        .insert(stories)
+        .values({
+          userId: user.id,
+          title: storyData.title || "Imported Story",
+          contentHindi: storyData.content_hindi || request.text,
+          contentRomanized: storyData.content_romanized || "",
+          contentEnglish: storyData.content_english || "",
+          sentencesJson: storyData.sentences || [],
+          targetNewWordIds: matchedNewWordIds,
+          targetGrammarIds: grammar.map((g) => g.id),
+          topic,
+          difficultyLevel: level,
+          wordCount: storyData.word_count || 0,
+          generationPrompt: prompt,
+          llmModel: "claude-sonnet-4-20250514",
+          llmResponseRaw: { content: responseText },
+        })
+        .returning();
+
+      // Create exercises
+      const createdExercises = await createExercises(
+        story.id,
+        storyData.exercises,
+      );
+
+      return c.json({
+        success: true,
+        data: formatStoryResponse(story, createdExercises),
+      });
+    } catch (error) {
+      console.error("Story import error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+
+      if (message.toLowerCase().includes("credit balance")) {
+        return c.json(
+          {
+            success: false,
+            error: "Story processing service temporarily unavailable",
           },
           503,
         );
@@ -649,31 +815,7 @@ storiesRoutes.get("/:storyId", async (c) => {
 
     return c.json({
       success: true,
-      data: {
-        id: story.id,
-        title: story.title,
-        contentHindi: story.contentHindi,
-        contentRomanized: story.contentRomanized,
-        contentEnglish: story.contentEnglish,
-        sentences: story.sentencesJson as StorySentence[],
-        targetNewWordIds: story.targetNewWordIds || [],
-        targetGrammarIds: story.targetGrammarIds || [],
-        topic: story.topic,
-        difficultyLevel: story.difficultyLevel,
-        wordCount: story.wordCount,
-        rating: story.rating,
-        createdAt: story.createdAt.toISOString(),
-        completedAt: story.completedAt?.toISOString(),
-        exercises: storyExercises.map((ex) => ({
-          id: ex.id,
-          storyId: ex.storyId,
-          type: ex.type,
-          question: ex.questionJson,
-          correctAnswer: ex.correctAnswer,
-          options: ex.options,
-          createdAt: ex.createdAt.toISOString(),
-        })),
-      },
+      data: formatStoryResponse(story, storyExercises),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";

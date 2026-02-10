@@ -12,7 +12,7 @@ export function ReviewView() {
   const [showAnswer, setShowAnswer] = useState(false);
   const [sessionComplete, setSessionComplete] = useState(false);
   const [correctCount, setCorrectCount] = useState(0);
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [, setAudioUrl] = useState<string | null>(null);
   const [isLoadingAudio, setIsLoadingAudio] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 

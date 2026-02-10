@@ -184,6 +184,61 @@ export function buildStoryGenerationPrompt(
 }
 
 // ============================================
+// STORY IMPORT PROMPT
+// ============================================
+
+export interface StoryImportContext {
+  level: CEFRLevel;
+  importedText: string;
+  knownVocabulary: string;
+  grammarConcepts: string;
+}
+
+function importTaskSection(level: string, importedText: string): string {
+  return `You are processing an IMPORTED Hindi story for a learner at ${level} level.
+The learner has pasted the following Devanagari text. Your job is to:
+1. Segment it into sentences — you MUST include ALL sentences from the original text, do NOT skip or omit any
+2. Provide romanization and English translation for the full story and each sentence
+3. Break each sentence into individual words with annotations
+4. Identify which words the learner does NOT already know (see known vocabulary below) and mark them with "isNew": true
+5. Generate exercises based on the story content
+6. Give the story a descriptive title in Hindi (with an English subtitle)
+
+CRITICAL — PRESERVE THE ORIGINAL TEXT EXACTLY:
+- The "hindi" field of each sentence MUST be the EXACT original Devanagari text — do NOT paraphrase, simplify, reword, or "correct" it
+- The "content_hindi" field MUST be the EXACT original text joined together — do NOT rewrite it
+- You are ONLY annotating and translating — NEVER modifying the source text
+- Every single sentence from the imported text must appear in your output — do NOT truncate or omit any part of the story
+
+IMPORTANT RULES FOR isNew MARKING:
+- A word is "isNew" if it does NOT appear in the KNOWN VOCABULARY list below (check root forms too)
+- Proper nouns (names of people, places) should NOT be marked as isNew
+- Common particles and punctuation should NOT be marked as isNew
+- If a word is a conjugated/inflected form of a known root word, it is NOT new
+
+IMPORTED TEXT:
+${importedText}`;
+}
+
+/**
+ * Builds the prompt for processing an imported Hindi story.
+ * Reuses existing section builders for consistency with generated stories.
+ */
+export function buildStoryImportPrompt(ctx: StoryImportContext): string {
+  const sections = [
+    roleSection(),
+    importTaskSection(ctx.level, ctx.importedText),
+    `KNOWN VOCABULARY (the learner can read these comfortably):\n${ctx.knownVocabulary || "Basic greetings, pronouns, and common verbs"}`,
+    grammarSection(ctx.grammarConcepts),
+    hindiGrammarRulesSection(),
+    outputFormatSection(),
+    exercisesSection(),
+  ].filter(Boolean);
+
+  return sections.join("\n\n");
+}
+
+// ============================================
 // GRAMMAR & COHESION VALIDATION PROMPT
 // ============================================
 

@@ -5,7 +5,7 @@ import { api, type StorySentence } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { DEFAULT_NEW_WORDS_PER_STORY } from "@monke-say/shared";
 import { Volume2, VolumeX, Loader2 } from "lucide-react";
@@ -75,6 +75,8 @@ export function StoryView() {
   } | null>(null);
   const [topic, setTopic] = useState("");
   const [newWordCount, setNewWordCount] = useState(DEFAULT_NEW_WORDS_PER_STORY);
+  const [storyMode, setStoryMode] = useState<"generate" | "import">("generate");
+  const [importText, setImportText] = useState("");
 
   // Cache for dictionary lookups to avoid repeated API calls
   const dictCacheRef = useRef<
@@ -250,6 +252,16 @@ export function StoryView() {
     },
   });
 
+  // Import story mutation
+  const importMutation = useMutation({
+    mutationFn: (params: { text: string; topic?: string }) =>
+      api.importStory(params),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["stories"] });
+      navigate(`/story/${data.id}/intro`, { replace: true });
+    },
+  });
+
   // Complete story mutation
   const completeMutation = useMutation({
     mutationFn: (rating?: number) => api.completeStory(story!.id, rating),
@@ -279,82 +291,146 @@ export function StoryView() {
     },
   });
 
-  // If no story ID, show generation form
-  if (!storyId && !generateMutation.isPending) {
+  // If no story ID, show generation/import form
+  if (
+    !storyId &&
+    !generateMutation.isPending &&
+    !importMutation.isPending
+  ) {
     return (
       <div className="max-w-2xl mx-auto space-y-8">
         <div>
-          <h1 className="text-3xl font-bold">Generate New Story</h1>
+          <h1 className="text-3xl font-bold">New Story</h1>
           <p className="text-muted-foreground mt-1">
-            Create a personalized story based on your vocabulary level
+            Generate a personalized story or import your own Hindi text
           </p>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Story Options</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <label className="text-sm font-medium mb-2 block">
-                Topic (optional)
-              </label>
-              <Input
-                placeholder="e.g., at the market, meeting a friend, ordering food..."
-                value={topic}
-                onChange={(e) => setTopic(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium mb-2 block">
-                New words per story: {newWordCount}
-              </label>
-              <input
-                type="range"
-                min={1}
-                max={8}
-                value={newWordCount}
-                onChange={(e) => setNewWordCount(Number(e.target.value))}
-                className="w-full accent-primary"
-              />
-              <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                <span>1 (easier)</span>
-                <span>8 (more challenge)</span>
-              </div>
-            </div>
-            <Button
-              className="w-full"
-              onClick={() =>
-                generateMutation.mutate({
-                  topic: topic || undefined,
-                  newWordCount,
-                })
-              }
-              disabled={generateMutation.isPending}
-            >
-              {generateMutation.isPending ? (
-                <>
-                  <span className="animate-spin mr-2">⏳</span>
-                  Generating story with Claude...
-                </>
-              ) : (
-                "Generate Story →"
-              )}
-            </Button>
-          </CardContent>
-        </Card>
+        <Tabs
+          value={storyMode}
+          onValueChange={(v) => setStoryMode(v as "generate" | "import")}
+        >
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="generate">Generate</TabsTrigger>
+            <TabsTrigger value="import">Import</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="generate">
+            <Card>
+              <CardHeader>
+                <CardTitle>Generate Story</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium mb-2 block">
+                    Topic (optional)
+                  </label>
+                  <Input
+                    placeholder="e.g., at the market, meeting a friend, ordering food..."
+                    value={topic}
+                    onChange={(e) => setTopic(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-2 block">
+                    New words per story: {newWordCount}
+                  </label>
+                  <input
+                    type="range"
+                    min={1}
+                    max={8}
+                    value={newWordCount}
+                    onChange={(e) => setNewWordCount(Number(e.target.value))}
+                    className="w-full accent-primary"
+                  />
+                  <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                    <span>1 (easier)</span>
+                    <span>8 (more challenge)</span>
+                  </div>
+                </div>
+                <Button
+                  className="w-full"
+                  onClick={() =>
+                    generateMutation.mutate({
+                      topic: topic || undefined,
+                      newWordCount,
+                    })
+                  }
+                  disabled={generateMutation.isPending}
+                >
+                  Generate Story →
+                </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="import">
+            <Card>
+              <CardHeader>
+                <CardTitle>Import Hindi Text</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium mb-2 block">
+                    Paste Devanagari text
+                  </label>
+                  <textarea
+                    className="flex min-h-[200px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 hindi-text text-lg"
+                    placeholder="यहाँ हिंदी पाठ चिपकाएँ..."
+                    value={importText}
+                    onChange={(e) => setImportText(e.target.value)}
+                    rows={8}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Paste any Hindi story or text in Devanagari script. It will
+                    be analyzed and annotated for your learning level.
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-2 block">
+                    Topic (optional)
+                  </label>
+                  <Input
+                    placeholder="e.g., daily life, travel..."
+                    value={topic}
+                    onChange={(e) => setTopic(e.target.value)}
+                  />
+                </div>
+                <Button
+                  className="w-full"
+                  onClick={() =>
+                    importMutation.mutate({
+                      text: importText,
+                      topic: topic || undefined,
+                    })
+                  }
+                  disabled={!importText.trim() || importMutation.isPending}
+                >
+                  Import & Process Story →
+                </Button>
+                {importMutation.isError && (
+                  <p className="text-sm text-destructive">
+                    {importMutation.error?.message || "Import failed"}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     );
   }
 
-  if (storyLoading || generateMutation.isPending) {
+  if (storyLoading || generateMutation.isPending || importMutation.isPending) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
         <p className="text-muted-foreground">
           {generateMutation.isPending
             ? "Claude is writing your story..."
-            : "Loading story..."}
+            : importMutation.isPending
+              ? "Claude is processing your text..."
+              : "Loading story..."}
         </p>
       </div>
     );

@@ -195,6 +195,13 @@ class ApiClient {
     });
   }
 
+  async importStory(params: { text: string; topic?: string }) {
+    return this.request<Story>("/stories/import", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+  }
+
   async getStory(storyId: string) {
     return this.request<Story>(`/stories/${storyId}`);
   }
