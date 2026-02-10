@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import { api, type ReviewWord } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -8,10 +8,12 @@ import { Volume2 } from "lucide-react";
 
 export function ReviewView() {
   const queryClient = useQueryClient();
+  const [queue, setQueue] = useState<ReviewWord[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
   const [sessionComplete, setSessionComplete] = useState(false);
   const [correctCount, setCorrectCount] = useState(0);
+  const [totalOriginal, setTotalOriginal] = useState(0);
   const [, setAudioUrl] = useState<string | null>(null);
   const [isLoadingAudio, setIsLoadingAudio] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -20,6 +22,14 @@ export function ReviewView() {
     queryKey: ["reviews-due"],
     queryFn: () => api.getDueReviews(20),
   });
+
+  // Initialize the mutable queue from fetched reviews
+  useEffect(() => {
+    if (reviews && reviews.length > 0 && queue.length === 0) {
+      setQueue([...reviews]);
+      setTotalOriginal(reviews.length);
+    }
+  }, [reviews, queue.length]);
 
   const playAudio = useCallback(async (text: string) => {
     try {
@@ -40,10 +50,10 @@ export function ReviewView() {
 
   // Auto-play audio when a new card is shown
   useEffect(() => {
-    if (reviews && reviews[currentIndex]) {
-      playAudio(reviews[currentIndex].hindi);
+    if (queue[currentIndex]) {
+      playAudio(queue[currentIndex].hindi);
     }
-  }, [currentIndex, reviews, playAudio]);
+  }, [currentIndex, queue, playAudio]);
 
   const submitMutation = useMutation({
     mutationFn: ({ wordId, quality }: { wordId: string; quality: number }) =>
@@ -53,11 +63,23 @@ export function ReviewView() {
         setCorrectCount((c) => c + 1);
       }
 
-      if (currentIndex + 1 >= (reviews?.length || 0)) {
-        setSessionComplete(true);
-        queryClient.invalidateQueries({ queryKey: ["reviews-due"] });
-        queryClient.invalidateQueries({ queryKey: ["review-summary"] });
-        queryClient.invalidateQueries({ queryKey: ["user-stats"] });
+      // Re-queue failed words (Again or Hard) at the end of the session
+      if (variables.quality < 3) {
+        setQueue((prev) => [...prev, prev[currentIndex]]);
+      }
+
+      if (currentIndex + 1 >= queue.length) {
+        // Check if we just added a re-queued word
+        if (variables.quality < 3) {
+          // There's now a re-queued word at the end, continue
+          setCurrentIndex((i) => i + 1);
+          setShowAnswer(false);
+        } else {
+          setSessionComplete(true);
+          queryClient.invalidateQueries({ queryKey: ["reviews-due"] });
+          queryClient.invalidateQueries({ queryKey: ["review-summary"] });
+          queryClient.invalidateQueries({ queryKey: ["user-stats"] });
+        }
       } else {
         setCurrentIndex((i) => i + 1);
         setShowAnswer(false);
@@ -73,7 +95,7 @@ export function ReviewView() {
     );
   }
 
-  if (!reviews || reviews.length === 0) {
+  if ((!reviews || reviews.length === 0) && queue.length === 0) {
     return (
       <div className="max-w-2xl mx-auto text-center space-y-6 py-12">
         <div className="text-6xl">🎉</div>
@@ -96,12 +118,12 @@ export function ReviewView() {
         <Card>
           <CardContent className="pt-6">
             <p className="text-lg">
-              You reviewed <span className="font-bold">{reviews.length}</span>{" "}
+              You reviewed <span className="font-bold">{totalOriginal}</span>{" "}
               words
             </p>
             <p className="text-muted-foreground">
               {correctCount} correct (
-              {Math.round((correctCount / reviews.length) * 100)}%)
+              {Math.round((correctCount / totalOriginal) * 100)}%)
             </p>
           </CardContent>
         </Card>
@@ -112,7 +134,15 @@ export function ReviewView() {
     );
   }
 
-  const currentReview = reviews[currentIndex];
+  const currentReview = queue[currentIndex];
+
+  if (!currentReview) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -121,10 +151,10 @@ export function ReviewView() {
         <div className="flex justify-between text-sm mb-2">
           <span>Review Progress</span>
           <span>
-            {currentIndex + 1} / {reviews.length}
+            {currentIndex + 1} / {queue.length}
           </span>
         </div>
-        <Progress value={((currentIndex + 1) / reviews.length) * 100} />
+        <Progress value={((currentIndex + 1) / queue.length) * 100} />
       </div>
 
       {/* Review Card */}
