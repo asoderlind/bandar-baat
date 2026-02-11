@@ -5,6 +5,20 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Volume2 } from "lucide-react";
+import { calculateSrsUpdate } from "@monke-say/shared";
+
+function formatInterval(days: number): string {
+  if (days < 1) {
+    const minutes = Math.round(days * 1440);
+    if (minutes < 1) return "<1m";
+    if (minutes < 60) return `${minutes}m`;
+    return `${Math.round(minutes / 60)}h`;
+  }
+  if (days === 1) return "1 day";
+  if (days < 30) return `${days} days`;
+  const months = Math.round(days / 30);
+  return months === 1 ? "1 month" : `${months} months`;
+}
 
 export function ReviewView() {
   const queryClient = useQueryClient();
@@ -217,59 +231,69 @@ export function ReviewView() {
               </div>
 
               {/* Rating buttons (SM-2 quality scale) */}
-              <div className="grid grid-cols-4 gap-2 w-full mt-auto pt-6">
-                <Button
-                  variant="destructive"
-                  onClick={() =>
-                    submitMutation.mutate({
-                      wordId: currentReview.wordId,
-                      quality: 0,
-                    })
-                  }
-                  disabled={submitMutation.isPending}
-                >
-                  Again
-                  <span className="text-xs block opacity-70">1 min</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    submitMutation.mutate({
-                      wordId: currentReview.wordId,
-                      quality: 2,
-                    })
-                  }
-                  disabled={submitMutation.isPending}
-                >
-                  Hard
-                  <span className="text-xs block opacity-70">10 min</span>
-                </Button>
-                <Button
-                  variant="secondary"
-                  onClick={() =>
-                    submitMutation.mutate({
-                      wordId: currentReview.wordId,
-                      quality: 4,
-                    })
-                  }
-                  disabled={submitMutation.isPending}
-                >
-                  Good
-                  <span className="text-xs block opacity-70">1 day</span>
-                </Button>
-                <Button
-                  onClick={() =>
-                    submitMutation.mutate({
-                      wordId: currentReview.wordId,
-                      quality: 5,
-                    })
-                  }
-                  disabled={submitMutation.isPending}
-                >
-                  Easy
-                  <span className="text-xs block opacity-70">4 days</span>
-                </Button>
-              </div>
+              {(() => {
+                const interval = currentReview.srsIntervalDays;
+                const ease = currentReview.srsEaseFactor;
+                const againInterval = formatInterval(calculateSrsUpdate(0, interval, ease).interval);
+                const hardInterval = formatInterval(calculateSrsUpdate(2, interval, ease).interval);
+                const goodInterval = formatInterval(calculateSrsUpdate(4, interval, ease).interval);
+                const easyInterval = formatInterval(calculateSrsUpdate(5, interval, ease).interval);
+                return (
+                  <div className="grid grid-cols-4 gap-2 w-full mt-auto pt-6">
+                    <Button
+                      variant="destructive"
+                      onClick={() =>
+                        submitMutation.mutate({
+                          wordId: currentReview.wordId,
+                          quality: 0,
+                        })
+                      }
+                      disabled={submitMutation.isPending}
+                    >
+                      Again
+                      <span className="text-xs block opacity-70">{againInterval}</span>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        submitMutation.mutate({
+                          wordId: currentReview.wordId,
+                          quality: 2,
+                        })
+                      }
+                      disabled={submitMutation.isPending}
+                    >
+                      Hard
+                      <span className="text-xs block opacity-70">{hardInterval}</span>
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      onClick={() =>
+                        submitMutation.mutate({
+                          wordId: currentReview.wordId,
+                          quality: 4,
+                        })
+                      }
+                      disabled={submitMutation.isPending}
+                    >
+                      Good
+                      <span className="text-xs block opacity-70">{goodInterval}</span>
+                    </Button>
+                    <Button
+                      onClick={() =>
+                        submitMutation.mutate({
+                          wordId: currentReview.wordId,
+                          quality: 5,
+                        })
+                      }
+                      disabled={submitMutation.isPending}
+                    >
+                      Easy
+                      <span className="text-xs block opacity-70">{easyInterval}</span>
+                    </Button>
+                  </div>
+                );
+              })()}
             </>
           )}
         </CardContent>

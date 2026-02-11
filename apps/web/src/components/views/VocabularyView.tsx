@@ -78,8 +78,25 @@ export function VocabularyView() {
   );
 }
 
+function formatReviewDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = date.getTime() - now.getTime();
+  const diffMins = Math.round(diffMs / 60000);
+  const diffHours = Math.round(diffMs / 3600000);
+  const diffDays = Math.round(diffMs / 86400000);
+
+  if (diffMs < 0) return "Due now";
+  if (diffMins < 60) return `In ${diffMins}m`;
+  if (diffHours < 24) return `In ${diffHours}h`;
+  if (diffDays === 1) return "Tomorrow";
+  if (diffDays < 7) return `In ${diffDays} days`;
+  return date.toLocaleDateString();
+}
+
 function WordCard({ word }: { word: Word }) {
   const status = word.userProgress?.status || "NEW";
+  const nextReview = word.userProgress?.nextReviewAt;
 
   return (
     <Card className="hover:shadow-md transition-shadow">
@@ -107,6 +124,18 @@ function WordCard({ word }: { word: Word }) {
         <div className="mt-1 text-xs text-muted-foreground">
           {word.partOfSpeech}
         </div>
+        {nextReview && (
+          <div
+            className={cn(
+              "mt-2 text-xs",
+              new Date(nextReview) <= new Date()
+                ? "text-orange-600 font-medium"
+                : "text-muted-foreground",
+            )}
+          >
+            Review: {formatReviewDate(nextReview)}
+          </div>
+        )}
         {word.tags.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">
             {word.tags.slice(0, 3).map((tag) => (

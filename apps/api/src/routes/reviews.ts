@@ -51,6 +51,7 @@ reviewsRoutes.get("/due", async (c) => {
         status: userWord.status,
         familiarity: userWord.familiarity,
         srsIntervalDays: userWord.srsIntervalDays,
+        srsEaseFactor: userWord.srsEaseFactor,
         nextReviewAt: userWord.nextReviewAt?.toISOString(),
       })),
     });
@@ -130,9 +131,10 @@ reviewsRoutes.post(
         userWord.srsEaseFactor,
       );
 
-      // Calculate next review date
-      const nextReviewAt = new Date();
-      nextReviewAt.setDate(nextReviewAt.getDate() + interval);
+      // Calculate next review date (supports fractional days for learning steps)
+      const nextReviewAt = new Date(
+        Date.now() + interval * 24 * 60 * 60 * 1000,
+      );
 
       // Determine new status
       let newStatus = userWord.status;

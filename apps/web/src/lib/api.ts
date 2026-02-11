@@ -324,6 +324,7 @@ interface Word {
     status: string;
     familiarity: number;
     timesSeen: number;
+    nextReviewAt: string | null;
   };
 }
 
@@ -414,6 +415,7 @@ interface ReviewWord {
   status: string;
   familiarity: number;
   srsIntervalDays: number;
+  srsEaseFactor: number;
   nextReviewAt: string | null;
 }
 

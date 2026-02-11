@@ -276,36 +276,67 @@ export function parseDate(dateString: string): Date {
 }
 
 /**
- * SM-2 SRS algorithm implementation
- * Returns new interval and ease factor based on quality (0-5)
+ * SRS algorithm with Anki-like learning steps.
+ *
+ * Learning phase (previousInterval <= 1): sub-day intervals in fractional days.
+ *   Again → 1 min, Hard → 6 min, Good → 10 min, Easy → 3 days (graduate)
+ *
+ * Review phase (previousInterval > 1): SM-2 style day-based intervals.
+ *   Again → 10 min (back to learning), Hard → interval * 1.2,
+ *   Good  → interval * easeFactor,    Easy → interval * easeFactor * 1.3
+ *
+ * Interval is in days (fractional for sub-day). Use interval * 86400000 to get ms.
  */
 export function calculateSrsUpdate(
   quality: number,
   previousInterval: number,
   previousEaseFactor: number,
 ): { interval: number; easeFactor: number } {
-  // Quality: 0-2 = incorrect, 3 = hard, 4 = good, 5 = easy
+  const MINUTE = 1 / 1440; // 1 minute as fraction of a day
   let easeFactor = previousEaseFactor;
-  let interval = previousInterval;
+  let interval: number;
 
-  if (quality < 3) {
-    // Reset interval on failure
-    interval = 1;
+  if (previousInterval <= 1) {
+    // ── Learning phase ──────────────────────────────────────
+    // Word is new or still in initial learning steps
+    switch (true) {
+      case quality === 0: // Again
+        interval = 1 * MINUTE;
+        break;
+      case quality <= 2: // Hard
+        interval = 6 * MINUTE;
+        break;
+      case quality <= 4: // Good
+        interval = 10 * MINUTE;
+        break;
+      default: // Easy (quality 5) — graduate immediately
+        interval = 3;
+        break;
+    }
   } else {
-    // Update ease factor
-    easeFactor = Math.max(
-      1.3,
-      previousEaseFactor +
-        (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)),
-    );
-
-    // Calculate new interval
-    if (previousInterval === 0) {
-      interval = 1;
-    } else if (previousInterval === 1) {
-      interval = 6;
+    // ── Review phase ────────────────────────────────────────
+    // Word has graduated; use SM-2 style intervals
+    if (quality < 3) {
+      // Failed — back to learning
+      interval = 10 * MINUTE;
     } else {
-      interval = Math.round(previousInterval * easeFactor);
+      // Update ease factor (SM-2 formula)
+      easeFactor = Math.max(
+        1.3,
+        previousEaseFactor +
+          (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)),
+      );
+
+      if (quality === 3) {
+        // Hard — modest increase
+        interval = Math.max(1, Math.round(previousInterval * 1.2));
+      } else if (quality === 4) {
+        // Good — standard SM-2
+        interval = Math.round(previousInterval * easeFactor);
+      } else {
+        // Easy — boosted
+        interval = Math.round(previousInterval * easeFactor * 1.3);
+      }
     }
   }
 
