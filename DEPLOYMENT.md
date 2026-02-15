@@ -23,7 +23,7 @@ Before deploying, configure the following secrets in your GitHub repository (Set
 - `ACME_EMAIL` - Email for Let's Encrypt SSL certificates
 - `ANTHROPIC_API_KEY` - API key for Anthropic Claude AI
 - `API_SECRET_KEY` - Secret key for API authentication
-- `GOOGLE_APPLICATION_CREDENTIALS` - JSON credentials for Google Cloud Platform
+- `GOOGLE_TTS_CREDENTIALS` - Google Cloud service account JSON credentials (the full JSON string, not base64)
 - `POSTGRES_USER` - PostgreSQL username
 - `POSTGRES_PASSWORD` - PostgreSQL password
 - `POSTGRES_DB` - PostgreSQL database name
