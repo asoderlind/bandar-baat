@@ -39,6 +39,7 @@ function getClient(): TextToSpeechClient {
 
     ttsClient = new TextToSpeechClient({
       credentials,
+      fallback: "rest",
     });
   }
   return ttsClient;
