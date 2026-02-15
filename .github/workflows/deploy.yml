@@ -86,7 +86,7 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           source: "docker-compose.prod.yml"
-          target: "~/monke-bar"
+          target: "~/monke-say"
 
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.0.3
@@ -96,8 +96,8 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           envs: POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_DB,MINIO_ROOT_USER,MINIO_ROOT_PASSWORD,MINIO_BUCKET,ANTHROPIC_API_KEY,API_SECRET_KEY,GOOGLE_APPLICATION_CREDENTIALS,DOMAIN,FRONTEND_URL,ACME_EMAIL,GHCR_TOKEN
           script: |
-            mkdir -p ~/monke-bar
-            cd ~/monke-bar
+            mkdir -p ~/monke-say
+            cd ~/monke-say
 
             # Write environment file from GitHub secrets
             cat > .env << EOF
@@ -122,14 +122,14 @@ jobs:
             docker compose -f docker-compose.prod.yml pull
 
             # Backup database before migration (if db container exists)
-            mkdir -p ~/monke-bar/backups
-            if docker ps -a --format '{{.Names}}' | grep -q 'monke-bar-db'; then
+            mkdir -p ~/monke-say/backups
+            if docker ps -a --format '{{.Names}}' | grep -q 'monke-say-db'; then
               echo "Backing up database..."
-              docker exec monke-bar-db pg_dump -U $POSTGRES_USER $POSTGRES_DB > ~/monke-bar/backups/backup-$(date +%Y%m%d-%H%M%S).sql
+              docker exec monke-say-db pg_dump -U $POSTGRES_USER $POSTGRES_DB > ~/monke-say/backups/backup-$(date +%Y%m%d-%H%M%S).sql
               # Keep only the last 5 backups
-              ls -t ~/monke-bar/backups/*.sql 2>/dev/null | tail -n +6 | xargs -r rm --
+              ls -t ~/monke-say/backups/*.sql 2>/dev/null | tail -n +6 | xargs -r rm --
               echo "Backup complete. Recent backups:"
-              ls -lh ~/monke-bar/backups/*.sql | head -5
+              ls -lh ~/monke-say/backups/*.sql | head -5
             else
               echo "No existing database container found, skipping backup"
             fi

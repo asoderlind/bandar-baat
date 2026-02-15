@@ -80,7 +80,7 @@ sh get-docker.sh
 usermod -aG docker $DEPLOY_USER
 
 # Create deployment directory
-mkdir -p ~/monke-bar
+mkdir -p ~/monke-say
 ```
 
 ## Google OAuth Setup
@@ -108,7 +108,7 @@ The setup includes Traefik as a reverse proxy with automatic SSL:
 
 ```bash
 ssh user@server
-cd ~/monke-bar
+cd ~/monke-say
 docker compose -f docker-compose.prod.yml logs -f
 ```
 
