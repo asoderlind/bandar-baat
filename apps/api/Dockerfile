@@ -22,7 +22,7 @@ WORKDIR /app/apps/api
 RUN pnpm build
 
 # Create standalone deployment with production dependencies
-RUN pnpm --filter @monke-say/api deploy --prod /deploy
+RUN pnpm --filter @monke-say/api deploy --prod --legacy /deploy
 
 # Production stage
 FROM node:22-slim
