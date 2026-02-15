@@ -50,7 +50,7 @@ services:
     restart: unless-stopped
 
   api:
-    image: ghcr.io/asoderlind/monke-say-api:latest
+    image: ghcr.io/asoderlind/bandar-baat-api:latest
     environment:
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
@@ -73,7 +73,7 @@ services:
     restart: unless-stopped
 
   web:
-    image: ghcr.io/asoderlind/monke-say-web:latest
+    image: ghcr.io/asoderlind/bandar-baat-web:latest
     depends_on:
       - api
     labels:
