@@ -21,16 +21,17 @@ COPY packages/shared ./packages/shared
 WORKDIR /app/apps/api
 RUN pnpm build
 
+# Create standalone deployment with production dependencies
+RUN pnpm --filter @monke-say/api deploy --prod /deploy
+
 # Production stage
 FROM node:22-slim
 
 WORKDIR /app
 
-RUN npm install -g pnpm
-
 COPY --from=builder /app/apps/api/dist ./dist
-COPY --from=builder /app/apps/api/package.json ./
-COPY --from=builder /app/apps/api/node_modules ./node_modules
+COPY --from=builder /deploy/node_modules ./node_modules
+COPY --from=builder /deploy/package.json ./
 
 EXPOSE 8000
 
