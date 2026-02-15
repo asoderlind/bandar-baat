@@ -1,48 +1,27 @@
 /**
- * Google Cloud Text-to-Speech integration for Hindi audio
+ * ElevenLabs Text-to-Speech integration for Hindi audio
  */
 
-import { TextToSpeechClient } from "@google-cloud/text-to-speech";
 import { createHash } from "crypto";
 import { objectExists, putObject, StoragePrefix } from "./storage.js";
 
-// Voice options for Hindi
-export const HINDI_VOICES = {
-  FEMALE_1: "hi-IN-Wavenet-A",
-  FEMALE_2: "hi-IN-Wavenet-D",
-  MALE_1: "hi-IN-Wavenet-B",
-  MALE_2: "hi-IN-Wavenet-C",
-  // Standard voices (cheaper)
-  FEMALE_STANDARD: "hi-IN-Standard-A",
-  MALE_STANDARD: "hi-IN-Standard-B",
-} as const;
+const ELEVENLABS_API_URL = "https://api.elevenlabs.io/v1";
 
-export type HindiVoice = (typeof HINDI_VOICES)[keyof typeof HINDI_VOICES];
+// Default voice ID can be overridden via env var
+const DEFAULT_VOICE_ID =
+  process.env.ELEVENLABS_VOICE_ID || "21m00Tcm4TlvDq8ikWAM";
+
+export type HindiVoice = string;
 
 export interface TTSOptions {
   voice?: HindiVoice;
-  speakingRate?: number; // 0.25 to 4.0, default 1.0
-  pitch?: number; // -20.0 to 20.0, default 0
+  speakingRate?: number; // 0.5 to 2.0, default 1.0
 }
 
-let ttsClient: TextToSpeechClient | null = null;
-
-/**
- * Get or create TTS client
- */
-function getClient(): TextToSpeechClient {
-  if (!ttsClient) {
-    const rawCredentials = process.env.GOOGLE_TTS_CREDENTIALS;
-    const credentials = rawCredentials
-      ? JSON.parse(Buffer.from(rawCredentials, "base64").toString())
-      : undefined;
-
-    ttsClient = new TextToSpeechClient({
-      credentials,
-      fallback: "rest",
-    });
-  }
-  return ttsClient;
+function getApiKey(): string {
+  const key = process.env.ELEVENLABS_API_KEY;
+  if (!key) throw new Error("ELEVENLABS_API_KEY not set");
+  return key;
 }
 
 /**
@@ -50,7 +29,7 @@ function getClient(): TextToSpeechClient {
  */
 function generateCacheKey(
   text: string,
-  voice: HindiVoice,
+  voice: string,
   rate: number,
 ): string {
   const hash = createHash("md5")
@@ -67,16 +46,15 @@ export function audioObjectKey(cacheKey: string): string {
 }
 
 /**
- * Synthesize Hindi text to speech.
- * Audio is cached in MinIO under  audio/<md5>.mp3
+ * Synthesize Hindi text to speech via ElevenLabs.
+ * Audio is cached in MinIO under audio/<md5>.mp3
  */
 export async function synthesizeHindi(
   text: string,
   options: TTSOptions = {},
 ): Promise<{ cacheKey: string }> {
-  const voice = options.voice || HINDI_VOICES.FEMALE_1;
+  const voice = options.voice || DEFAULT_VOICE_ID;
   const speakingRate = options.speakingRate || 1.0;
-  const pitch = options.pitch || 0;
 
   const cacheKey = generateCacheKey(text, voice, speakingRate);
   const key = audioObjectKey(cacheKey);
@@ -86,29 +64,38 @@ export async function synthesizeHindi(
     return { cacheKey };
   }
 
-  // Generate new audio via Google Cloud TTS
-  const client = getClient();
-
-  const [response] = await client.synthesizeSpeech({
-    input: { text },
-    voice: {
-      languageCode: "hi-IN",
-      name: voice,
+  const response = await fetch(
+    `${ELEVENLABS_API_URL}/text-to-speech/${voice}?output_format=mp3_44100_128`,
+    {
+      method: "POST",
+      headers: {
+        "xi-api-key": getApiKey(),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        text,
+        model_id: "eleven_multilingual_v2",
+        voice_settings: {
+          stability: 0.5,
+          similarity_boost: 0.75,
+        },
+        ...(speakingRate !== 1.0 && { speed: speakingRate }),
+      }),
     },
-    audioConfig: {
-      audioEncoding: "MP3",
-      speakingRate,
-      pitch,
-      sampleRateHertz: 24000,
-    },
-  });
+  );
 
-  if (!response.audioContent) {
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`ElevenLabs TTS error ${response.status}: ${body}`);
+  }
+
+  const audioBuffer = Buffer.from(await response.arrayBuffer());
+  if (audioBuffer.length === 0) {
     throw new Error("No audio content returned from TTS API");
   }
 
   // Store in MinIO
-  await putObject(key, response.audioContent as Buffer, "audio/mpeg");
+  await putObject(key, audioBuffer, "audio/mpeg");
 
   return { cacheKey };
 }
@@ -143,10 +130,19 @@ export async function synthesizeSentences(
 }
 
 /**
- * Get available Hindi voices
+ * Get available voices from ElevenLabs
  */
-export async function listHindiVoices() {
-  const client = getClient();
-  const [response] = await client.listVoices({ languageCode: "hi-IN" });
-  return response.voices || [];
+export async function listVoices() {
+  const response = await fetch(`${ELEVENLABS_API_URL}/voices`, {
+    headers: { "xi-api-key": getApiKey() },
+  });
+
+  if (!response.ok) {
+    throw new Error(`List voices error ${response.status}`);
+  }
+
+  const data = (await response.json()) as {
+    voices?: Array<{ voice_id: string; name: string }>;
+  };
+  return data.voices || [];
 }

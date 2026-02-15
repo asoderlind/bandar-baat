@@ -4,8 +4,8 @@ import { z } from "zod";
 import { requireAuth, type AuthContext } from "../lib/middleware.js";
 import {
   synthesizeHindi,
-  HINDI_VOICES,
   audioObjectKey,
+  listVoices,
   type HindiVoice,
 } from "../lib/tts.js";
 import { getObject } from "../lib/storage.js";
@@ -19,16 +19,7 @@ const synthesizeSchema = z.object({
   text: z.string().min(1).max(5000),
   slow: z.boolean().optional().default(false),
   speakingRate: z.number().min(0.25).max(4.0).optional(),
-  voice: z
-    .enum([
-      "hi-IN-Wavenet-A",
-      "hi-IN-Wavenet-B",
-      "hi-IN-Wavenet-C",
-      "hi-IN-Wavenet-D",
-      "hi-IN-Standard-A",
-      "hi-IN-Standard-B",
-    ])
-    .optional(),
+  voice: z.string().optional(),
 });
 
 /**
@@ -60,12 +51,11 @@ ttsRoutes.post(
       console.error("TTS synthesis error:", error);
       const message = error instanceof Error ? error.message : "Unknown error";
 
-      if (message.includes("credentials") || message.includes("auth")) {
+      if (message.includes("ELEVENLABS_API_KEY")) {
         return c.json(
           {
             success: false,
-            error:
-              "TTS service not configured. Please set up Google Cloud credentials.",
+            error: "TTS service not configured.",
           },
           503,
         );
@@ -113,16 +103,7 @@ const batchSynthesizeSchema = z.object({
   sentences: z.array(z.string().min(1).max(2000)).min(1).max(50),
   slow: z.boolean().optional().default(false),
   speakingRate: z.number().min(0.25).max(4.0).optional(),
-  voice: z
-    .enum([
-      "hi-IN-Wavenet-A",
-      "hi-IN-Wavenet-B",
-      "hi-IN-Wavenet-C",
-      "hi-IN-Wavenet-D",
-      "hi-IN-Standard-A",
-      "hi-IN-Standard-B",
-    ])
-    .optional(),
+  voice: z.string().optional(),
 });
 
 /**
@@ -176,18 +157,22 @@ ttsRoutes.post(
 
 /**
  * GET /api/tts/voices
- * List available Hindi voices
+ * List available voices from ElevenLabs
  */
 ttsRoutes.get("/voices", async (c) => {
-  return c.json({
-    success: true,
-    data: {
-      voices: Object.entries(HINDI_VOICES).map(([key, value]) => ({
-        id: value,
-        name: key.replace(/_/g, " ").toLowerCase(),
-        isWavenet: value.includes("Wavenet"),
-      })),
-      default: HINDI_VOICES.FEMALE_1,
-    },
-  });
+  try {
+    const voices = await listVoices();
+    return c.json({
+      success: true,
+      data: {
+        voices: voices.map((v) => ({
+          id: v.voice_id,
+          name: v.name,
+        })),
+      },
+    });
+  } catch (error) {
+    console.error("List voices error:", error);
+    return c.json({ success: false, error: "Failed to list voices" }, 500);
+  }
 });

@@ -68,7 +68,8 @@ services:
       - MINIO_BUCKET=${MINIO_BUCKET:-monke-say}
       - BETTER_AUTH_BASE_URL=https://babel.monkebrain.com/api
       - FRONTEND_URL=${FRONTEND_URL}
-      - GOOGLE_TTS_CREDENTIALS=${GOOGLE_TTS_CREDENTIALS}
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
+      - ELEVENLABS_VOICE_ID=${ELEVENLABS_VOICE_ID}
     depends_on:
       db:
         condition: service_healthy
