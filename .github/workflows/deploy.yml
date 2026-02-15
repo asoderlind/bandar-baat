@@ -1,6 +1,8 @@
 name: Build and Deploy
 
 on:
+  push:
+    branches: [main, master]
   workflow_dispatch:
   release:
     types: [published]
@@ -36,8 +38,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository }}-api
           tags: |
-            type=raw,value=latest
-            type=semver,pattern={{version}}
+            type=raw,value=latest,enable={{is_default_branch}}
             type=sha,prefix=
 
       - name: Build and push API image
@@ -58,8 +59,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository }}-web
           tags: |
-            type=raw,value=latest
-            type=semver,pattern={{version}}
+            type=raw,value=latest,enable={{is_default_branch}}
             type=sha,prefix=
 
       - name: Build and push Web image
@@ -75,6 +75,85 @@ jobs:
           build-args: |
             VITE_API_URL=https://strong.monkebrain.com/api
 
+      - name: Copy docker-compose to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          source: "docker-compose.prod.yml"
+          target: "~/monke-bar"
+
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          envs: POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_DB,MINIO_ROOT_USER,MINIO_ROOT_PASSWORD,MINIO_BUCKET,ANTHROPIC_API_KEY,API_SECRET_KEY,GOOGLE_APPLICATION_CREDENTIALS,DOMAIN,FRONTEND_URL,ACME_EMAIL,GHCR_TOKEN
+          script: |
+            mkdir -p ~/monke-bar
+            cd ~/monke-bar
+
+            # Write environment file from GitHub secrets
+            cat > .env << EOF
+            POSTGRES_USER=$POSTGRES_USER
+            POSTGRES_PASSWORD=$POSTGRES_PASSWORD
+            POSTGRES_DB=$POSTGRES_DB
+            MINIO_ROOT_USER=$MINIO_ROOT_USER
+            MINIO_ROOT_PASSWORD=$MINIO_ROOT_PASSWORD
+            MINIO_BUCKET=$MINIO_BUCKET
+            ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY
+            API_SECRET_KEY=$API_SECRET_KEY
+            GOOGLE_APPLICATION_CREDENTIALS=$GOOGLE_APPLICATION_CREDENTIALS
+            DOMAIN=$DOMAIN
+            FRONTEND_URL=$FRONTEND_URL
+            ACME_EMAIL=$ACME_EMAIL
+            EOF
+
+            # Login to GitHub Container Registry
+            echo $GHCR_TOKEN | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            # Pull new images first
+            docker compose -f docker-compose.prod.yml pull
+
+            # Backup database before migration (if db container exists)
+            mkdir -p ~/monke-bar/backups
+            if docker ps -a --format '{{.Names}}' | grep -q 'monke-bar-db'; then
+              echo "Backing up database..."
+              docker exec monke-bar-db pg_dump -U $POSTGRES_USER $POSTGRES_DB > ~/monke-bar/backups/backup-$(date +%Y%m%d-%H%M%S).sql
+              # Keep only the last 5 backups
+              ls -t ~/monke-bar/backups/*.sql 2>/dev/null | tail -n +6 | xargs -r rm --
+              echo "Backup complete. Recent backups:"
+              ls -lh ~/monke-bar/backups/*.sql | head -5
+            else
+              echo "No existing database container found, skipping backup"
+            fi
+
+            # Stop and remove old containers
+            docker compose -f docker-compose.prod.yml down || true
+
+            # Start services
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            docker image prune -f
+
+            # Show running containers for debugging
+            docker ps
+        env:
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+          MINIO_ROOT_USER: ${{ secrets.MINIO_ROOT_USER }}
+          MINIO_ROOT_PASSWORD: ${{ secrets.MINIO_ROOT_PASSWORD }}
+          MINIO_BUCKET: ${{ secrets.MINIO_BUCKET }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          API_SECRET_KEY: ${{ secrets.API_SECRET_KEY }}
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
+          DOMAIN: ${{ secrets.DOMAIN }}
+          FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
+          ACME_EMAIL: ${{ secrets.ACME_EMAIL }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+
       - name: Summary
         run: |
           echo "### Deployed :rocket:" >> $GITHUB_STEP_SUMMARY
@@ -82,3 +161,5 @@ jobs:
           echo "**Images:**" >> $GITHUB_STEP_SUMMARY
           echo "- API: ${{ steps.meta-api.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
           echo "- Web: ${{ steps.meta-web.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Server:** ${{ secrets.SERVER_IP }}" >> $GITHUB_STEP_SUMMARY
