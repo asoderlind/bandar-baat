@@ -21,7 +21,11 @@ COPY packages/shared ./packages/shared
 ARG VITE_API_URL
 ENV VITE_API_URL=${VITE_API_URL}
 
-# Build
+# Build shared package first
+WORKDIR /app/packages/shared
+RUN pnpm build
+
+# Build web app
 WORKDIR /app/apps/web
 RUN pnpm build
 
