@@ -32,8 +32,9 @@ let ttsClient: TextToSpeechClient | null = null;
  */
 function getClient(): TextToSpeechClient {
   if (!ttsClient) {
-    const credentials = process.env.GOOGLE_TTS_CREDENTIALS
-      ? JSON.parse(process.env.GOOGLE_TTS_CREDENTIALS)
+    const rawCredentials = process.env.GOOGLE_TTS_CREDENTIALS;
+    const credentials = rawCredentials
+      ? JSON.parse(Buffer.from(rawCredentials, "base64").toString())
       : undefined;
 
     ttsClient = new TextToSpeechClient({
