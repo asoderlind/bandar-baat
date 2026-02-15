@@ -77,7 +77,7 @@ jobs:
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=max,scope=web
           build-args: |
-            VITE_API_URL=https://strong.monkebrain.com/api
+            VITE_API_URL=https://babel.monkebrain.com/api
 
       - name: Copy docker-compose to VPS
         uses: appleboy/scp-action@v0.1.7

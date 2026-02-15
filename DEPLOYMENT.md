@@ -18,8 +18,8 @@ Before deploying, configure the following secrets in your GitHub repository (Set
 
 ### Application Configuration
 
-- `DOMAIN` - Your application domain (e.g., `strong.monkebrain.com`)
-- `FRONTEND_URL` - Full frontend URL (e.g., `https://strong.monkebrain.com`)
+- `DOMAIN` - Your application domain (e.g., `babel.monkebrain.com`)
+- `FRONTEND_URL` - Full frontend URL (e.g., `https://babel.monkebrain.com`)
 - `ACME_EMAIL` - Email for Let's Encrypt SSL certificates
 - `ANTHROPIC_API_KEY` - API key for Anthropic Claude AI
 - `API_SECRET_KEY` - Secret key for API authentication
@@ -90,7 +90,7 @@ mkdir -p ~/monke-say
 3. Enable Google Sheets API and Google Drive API
 4. Create OAuth 2.0 credentials
 5. Add authorized redirect URIs:
-   - `https://strong.monkebrain.com/api/auth/callback/google`
+   - `https://babel.monkebrain.com/api/auth/callback/google`
 6. Copy Client ID and Client Secret to GitHub secrets
 
 ## Traefik & SSL
