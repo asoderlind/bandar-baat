@@ -39,7 +39,7 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-      MINIO_BROWSER_REDIRECT_URL: https://${DOMAIN}/minio
+      MINIO_BROWSER_REDIRECT_URL: https://minio.${DOMAIN}
     volumes:
       - minio_data:/data
     command: server /data --console-address ":9001"
@@ -50,11 +50,9 @@ services:
       retries: 5
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.minio-console.rule=Host(`${DOMAIN}`) && PathPrefix(`/minio`)"
+      - "traefik.http.routers.minio-console.rule=Host(`minio.${DOMAIN}`)"
       - "traefik.http.routers.minio-console.entrypoints=websecure"
       - "traefik.http.routers.minio-console.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.minio-console.middlewares=minio-strip"
-      - "traefik.http.middlewares.minio-strip.stripprefix.prefixes=/minio"
       - "traefik.http.services.minio-console.loadbalancer.server.port=9001"
     restart: unless-stopped
 
