@@ -70,6 +70,7 @@ services:
       - FRONTEND_URL=${FRONTEND_URL}
       - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
       - ELEVENLABS_VOICE_ID=${ELEVENLABS_VOICE_ID}
+      - ELEVENLABS_API_URL=${ELEVENLABS_API_URL:-https://api.elevenlabs.io/v1}
     depends_on:
       db:
         condition: service_healthy

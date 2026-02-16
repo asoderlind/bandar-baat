@@ -5,7 +5,8 @@
 import { createHash } from "crypto";
 import { objectExists, putObject, StoragePrefix } from "./storage.js";
 
-const ELEVENLABS_API_URL = "https://api.elevenlabs.io/v1";
+const ELEVENLABS_API_URL =
+  process.env.ELEVENLABS_API_URL || "https://api.elevenlabs.io/v1";
 
 // Default voice ID can be overridden via env var
 const DEFAULT_VOICE_ID =
