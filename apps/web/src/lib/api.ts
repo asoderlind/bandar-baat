@@ -241,9 +241,8 @@ class ApiClient {
   }
 
   // Reviews
-  async getDueReviews(limit?: number) {
-    const query = limit ? `?limit=${limit}` : "";
-    return this.request<ReviewWord[]>(`/reviews/due${query}`);
+  async getDueReviews() {
+    return this.request<ReviewWord[]>(`/reviews/due`);
   }
 
   async getReviewSummary() {

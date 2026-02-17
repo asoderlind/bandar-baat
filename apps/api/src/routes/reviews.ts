@@ -19,7 +19,6 @@ reviewsRoutes.use("*", requireAuth);
 reviewsRoutes.get("/due", async (c) => {
   try {
     const user = c.get("user");
-    const limit = Math.min(parseInt(c.req.query("limit") || "20"), 50);
 
     const now = new Date();
 
@@ -36,8 +35,7 @@ reviewsRoutes.get("/due", async (c) => {
           inArray(userWords.status, ["LEARNING", "KNOWN"]),
           or(isNull(userWords.nextReviewAt), lte(userWords.nextReviewAt, now)),
         ),
-      )
-      .limit(limit);
+      );
 
     return c.json({
       success: true,

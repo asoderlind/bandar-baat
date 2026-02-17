@@ -34,7 +34,7 @@ export function ReviewView() {
 
   const { data: reviews, isLoading } = useQuery({
     queryKey: ["reviews-due"],
-    queryFn: () => api.getDueReviews(20),
+    queryFn: () => api.getDueReviews(),
   });
 
   // Initialize the mutable queue from fetched reviews
@@ -78,8 +78,24 @@ export function ReviewView() {
       }
 
       // Re-queue failed words (Again or Hard) at the end of the session
+      // Update SRS values so the preview intervals reflect the post-failure state
       if (variables.quality < 3) {
-        setQueue((prev) => [...prev, prev[currentIndex]]);
+        setQueue((prev) => {
+          const word = prev[currentIndex];
+          const { interval, easeFactor } = calculateSrsUpdate(
+            variables.quality,
+            word.srsIntervalDays,
+            word.srsEaseFactor,
+          );
+          return [
+            ...prev,
+            {
+              ...word,
+              srsIntervalDays: interval,
+              srsEaseFactor: easeFactor,
+            },
+          ];
+        });
       }
 
       if (currentIndex + 1 >= queue.length) {
