@@ -2,7 +2,9 @@ import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
+import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { auth } from "./auth.js";
+import { db } from "./db/index.js";
 import { initStorage } from "./lib/storage.js";
 import { wordsRoutes } from "./routes/words.js";
 import { grammarRoutes } from "./routes/grammar.js";
@@ -50,6 +52,11 @@ app.route("/api/dictionary", dictionaryRoutes);
 const port = parseInt(process.env.PORT || "8000");
 
 async function main() {
+  // Run database migrations before accepting requests
+  console.log("🔄 Running database migrations...");
+  await migrate(db, { migrationsFolder: "./drizzle" });
+  console.log("✅ Migrations complete!");
+
   // Ensure MinIO bucket exists before accepting requests
   await initStorage();
 
