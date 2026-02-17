@@ -141,6 +141,13 @@ jobs:
 
             # Start services
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
+
+            # Wait for API container to be ready, then run migrations
+            echo "Waiting for API container to start..."
+            sleep 5
+            echo "Running database migrations..."
+            docker compose -f docker-compose.prod.yml exec -T api node dist/db/migrate.js
+
             docker image prune -f
 
             # Show running containers for debugging

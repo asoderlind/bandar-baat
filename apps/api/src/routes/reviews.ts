@@ -46,6 +46,7 @@ reviewsRoutes.get("/due", async (c) => {
         romanized: word.romanized,
         english: word.english,
         partOfSpeech: word.partOfSpeech,
+        gender: word.gender || null,
         status: userWord.status,
         familiarity: userWord.familiarity,
         srsIntervalDays: userWord.srsIntervalDays,

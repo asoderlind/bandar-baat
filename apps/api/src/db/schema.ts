@@ -44,6 +44,8 @@ export const grammarStatusEnum = pgEnum("grammar_status", [
   "LEARNED",
 ]);
 
+export const genderEnum = pgEnum("gender", ["MASCULINE", "FEMININE"]);
+
 export const wordSourceEnum = pgEnum("word_source", [
   "SEEDED",
   "STORY",
@@ -131,6 +133,7 @@ export const words = pgTable("words", {
   romanized: text("romanized").notNull(),
   english: text("english").notNull(),
   partOfSpeech: partOfSpeechEnum("part_of_speech").notNull(),
+  gender: genderEnum("gender"),
   rootFormId: uuid("root_form_id"),
   cefrLevel: cefrLevelEnum("cefr_level").notNull(),
   tags: text("tags").array().default([]),

@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Volume2 } from "lucide-react";
 import { calculateSrsUpdate } from "@monke-say/shared";
+import { cn, getGenderClass } from "@/lib/utils";
 
 function formatInterval(days: number): string {
   if (days < 1) {
@@ -196,7 +197,7 @@ export function ReviewView() {
           {!showAnswer ? (
             <>
               <div className="flex-1 flex flex-col items-center justify-center w-full">
-                <div className="hindi-large text-4xl text-center mb-4">
+                <div className={cn("hindi-large text-4xl text-center mb-4", getGenderClass(currentReview.partOfSpeech, currentReview.gender))}>
                   {currentReview.hindi}
                 </div>
                 <Button
@@ -224,7 +225,7 @@ export function ReviewView() {
           ) : (
             <>
               <div className="flex-1 flex flex-col items-center justify-center w-full">
-                <div className="hindi-large text-4xl text-center mb-2">
+                <div className={cn("hindi-large text-4xl text-center mb-2", getGenderClass(currentReview.partOfSpeech, currentReview.gender))}>
                   {currentReview.hindi}
                 </div>
                 <Button

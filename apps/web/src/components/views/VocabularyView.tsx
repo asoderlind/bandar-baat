@@ -4,7 +4,7 @@ import { api, type Word } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { cn } from "@/lib/utils";
+import { cn, getGenderClass } from "@/lib/utils";
 
 export function VocabularyView() {
   const [search, setSearch] = useState("");
@@ -103,7 +103,7 @@ function WordCard({ word }: { word: Word }) {
       <CardContent className="p-4">
         <div className="flex justify-between items-start">
           <div>
-            <div className="hindi-text text-xl">{word.hindi}</div>
+            <div className={cn("hindi-text text-xl", getGenderClass(word.partOfSpeech, word.gender))}>{word.hindi}</div>
             <div className="text-sm text-muted-foreground">
               {word.romanized}
             </div>

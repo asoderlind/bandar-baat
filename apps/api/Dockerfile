@@ -34,6 +34,7 @@ FROM node:22-slim
 WORKDIR /app
 
 COPY --from=builder /app/apps/api/dist ./dist
+COPY --from=builder /app/apps/api/drizzle ./drizzle
 COPY --from=builder /deploy/node_modules ./node_modules
 COPY --from=builder /deploy/package.json ./
 

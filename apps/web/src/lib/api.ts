@@ -316,6 +316,7 @@ interface Word {
   romanized: string;
   english: string;
   partOfSpeech: string;
+  gender?: string | null;
   cefrLevel: string;
   tags: string[];
   notes: string | null;
@@ -367,6 +368,7 @@ interface StorySentence {
     wordId?: string;
     isNew: boolean;
     partOfSpeech?: string;
+    gender?: string;
     grammarNote?: string;
   }[];
   grammarNotes: string[];
@@ -411,6 +413,7 @@ interface ReviewWord {
   romanized: string;
   english: string;
   partOfSpeech: string;
+  gender?: string | null;
   status: string;
   familiarity: number;
   srsIntervalDays: number;

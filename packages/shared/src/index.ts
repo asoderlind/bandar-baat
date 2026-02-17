@@ -28,6 +28,8 @@ export type ExerciseType =
   | "WORD_ORDER"
   | "MULTIPLE_CHOICE";
 
+export type Gender = "MASCULINE" | "FEMININE";
+
 export type SessionType = "STORY" | "REVIEW" | "PLACEMENT" | "FREE_PRACTICE";
 
 // ============================================
@@ -40,6 +42,7 @@ export interface Word {
   romanized: string;
   english: string;
   partOfSpeech: PartOfSpeech;
+  gender?: Gender;
   rootFormId?: string;
   cefrLevel: CEFRLevel;
   tags: string[];

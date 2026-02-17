@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { cn } from "@/lib/utils";
+import { cn, getGenderClass } from "@/lib/utils";
 
 import { Volume2, VolumeX, Loader2 } from "lucide-react";
 
@@ -63,6 +63,7 @@ export function StoryView() {
     romanized: string;
     english: string;
     partOfSpeech?: string;
+    gender?: string;
     isNew?: boolean;
     position?: { x: number; y: number };
     loading?: boolean;
@@ -455,7 +456,7 @@ export function StoryView() {
                 className="flex items-center justify-between p-3 bg-accent rounded-lg"
               >
                 <div>
-                  <div className="hindi-text text-xl text-primary">
+                  <div className={cn("hindi-text text-xl", getGenderClass(word.partOfSpeech, word.gender) || "text-primary")}>
                     {word.hindi}
                   </div>
                   <div className="text-sm text-muted-foreground">
@@ -593,7 +594,7 @@ export function StoryView() {
               <div className="flex justify-between items-start gap-2">
                 <div className="space-y-1 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="hindi-text text-2xl font-semibold">
+                    <span className={cn("hindi-text text-2xl font-semibold", getGenderClass(selectedWord.partOfSpeech, selectedWord.gender))}>
                       {selectedWord.hindi}
                     </span>
                     <Button
@@ -838,6 +839,7 @@ function StoryProse({
     romanized: string;
     english: string;
     partOfSpeech?: string;
+    gender?: string;
     isNew?: boolean;
     position?: { x: number; y: number };
     loading?: boolean;
@@ -877,9 +879,12 @@ function StoryProse({
             key={i}
             className={cn(
               "cursor-pointer hover:bg-primary/20 rounded px-0.5 transition-colors",
-              word.isNew
-                ? "text-primary font-medium underline decoration-dotted underline-offset-4"
-                : "hover:text-primary",
+              getGenderClass(word.partOfSpeech, word.gender) ||
+                (word.isNew
+                  ? "text-primary font-medium underline decoration-dotted underline-offset-4"
+                  : "hover:text-primary"),
+              word.isNew && getGenderClass(word.partOfSpeech, word.gender) &&
+                "font-medium underline decoration-dotted underline-offset-4",
             )}
             onClick={(e) => {
               const rect = e.currentTarget.getBoundingClientRect();

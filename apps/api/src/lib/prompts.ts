@@ -67,7 +67,8 @@ function newWordRulesSection(): string {
 - Introduce new vocabulary naturally as the story requires — do not force words that don't fit
 - NEVER insert random unrelated actions just to use a word
 - The story's coherence is more important than introducing many new words
-- Mark every word NOT in the known vocabulary list as "isNew": true in the sentence word annotations`;
+- Mark every word NOT in the known vocabulary list as "isNew": true in the sentence word annotations
+- For every NOUN, include "gender": "MASCULINE" or "FEMININE" in the word annotation. Omit gender for non-nouns.`;
 }
 
 function hindiGrammarRulesSection(): string {
@@ -119,7 +120,8 @@ function outputFormatSection(): string {
           "romanized": "word",
           "english": "meaning",
           "isNew": true,
-          "partOfSpeech": "NOUN"
+          "partOfSpeech": "NOUN",
+          "gender": "MASCULINE"
         }
       ],
       "grammarNotes": ["Optional: brief grammar insight for this sentence"]

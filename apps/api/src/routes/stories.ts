@@ -517,7 +517,7 @@ storiesRoutes.post(
       // Post-generation word matching: find words marked isNew by Claude
       const genNewWordSet = new Map<
         string,
-        { hindi: string; romanized: string; english: string; partOfSpeech?: string }
+        { hindi: string; romanized: string; english: string; partOfSpeech?: string; gender?: string }
       >();
       for (const sentence of storyData.sentences || []) {
         for (const word of sentence.words || []) {
@@ -564,6 +564,8 @@ storiesRoutes.post(
         } else {
           const rawPos = wordInfo.partOfSpeech?.toUpperCase() ?? "";
           const pos = validPOS.has(rawPos) ? rawPos : "NOUN";
+          const rawGender = wordInfo.gender?.toUpperCase();
+          const gender = (rawGender === "MASCULINE" || rawGender === "FEMININE") ? rawGender : null;
           try {
             const [newWord] = await db
               .insert(words)
@@ -572,6 +574,7 @@ storiesRoutes.post(
                 romanized: wordInfo.romanized || "",
                 english: wordInfo.english || "",
                 partOfSpeech: pos as any,
+                gender: pos === "NOUN" ? gender as any : null,
                 cefrLevel: level,
                 tags: ["generated"],
               })
@@ -730,7 +733,7 @@ storiesRoutes.post(
       // Word matching: compare Claude's isNew annotations against the DB
       const newWordHindiSet = new Map<
         string,
-        { hindi: string; romanized: string; english: string; partOfSpeech?: string }
+        { hindi: string; romanized: string; english: string; partOfSpeech?: string; gender?: string }
       >();
       for (const sentence of storyData.sentences || []) {
         for (const word of sentence.words || []) {
@@ -781,6 +784,8 @@ storiesRoutes.post(
           // Word not in DB — auto-create it from Claude's annotations
           const rawPos = wordInfo.partOfSpeech?.toUpperCase() ?? "";
           const pos = validPartOfSpeech.has(rawPos) ? rawPos : "NOUN";
+          const rawGender = wordInfo.gender?.toUpperCase();
+          const gender = (rawGender === "MASCULINE" || rawGender === "FEMININE") ? rawGender : null;
           try {
             const [newWord] = await db
               .insert(words)
@@ -789,6 +794,7 @@ storiesRoutes.post(
                 romanized: wordInfo.romanized || "",
                 english: wordInfo.english || "",
                 partOfSpeech: pos as any,
+                gender: pos === "NOUN" ? gender as any : null,
                 cefrLevel: level,
                 tags: ["imported"],
               })
