@@ -22,7 +22,7 @@ wordsRoutes.get("/", async (c) => {
     const status = c.req.query("status") as WordStatus | undefined;
     const level = c.req.query("level") as CEFRLevel | undefined;
     const search = c.req.query("q");
-    const limit = Math.min(parseInt(c.req.query("limit") || "50"), 200);
+    const limit = Math.min(parseInt(c.req.query("limit") || "50"), 5000);
     const offset = parseInt(c.req.query("offset") || "0");
 
     // Build query

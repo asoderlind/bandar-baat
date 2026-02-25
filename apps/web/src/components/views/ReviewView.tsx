@@ -4,7 +4,7 @@ import { api, type ReviewWord } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Volume2 } from "lucide-react";
+import { Volume2, Undo2 } from "lucide-react";
 import { calculateSrsUpdate } from "@monke-say/shared";
 import { cn, getGenderClass } from "@/lib/utils";
 
@@ -21,6 +21,12 @@ function formatInterval(days: number): string {
   return months === 1 ? "1 month" : `${months} months`;
 }
 
+interface LastAction {
+  wasRequeued: boolean;
+  wasCorrect: boolean;
+  completedSession: boolean;
+}
+
 export function ReviewView() {
   const queryClient = useQueryClient();
   const [queue, setQueue] = useState<ReviewWord[]>([]);
@@ -32,6 +38,8 @@ export function ReviewView() {
   const [, setAudioUrl] = useState<string | null>(null);
   const [isLoadingAudio, setIsLoadingAudio] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [canUndo, setCanUndo] = useState(false);
+  const lastActionRef = useRef<LastAction | null>(null);
 
   const { data: reviews, isLoading } = useQuery({
     queryKey: ["reviews-due"],
@@ -74,13 +82,15 @@ export function ReviewView() {
     mutationFn: ({ wordId, quality }: { wordId: string; quality: number }) =>
       api.submitReview(wordId, quality),
     onSuccess: (_, variables) => {
-      if (variables.quality >= 3) {
+      const wasCorrect = variables.quality >= 3;
+      const wasRequeued = variables.quality < 3;
+
+      if (wasCorrect) {
         setCorrectCount((c) => c + 1);
       }
 
       // Re-queue failed words (Again or Hard) at the end of the session
-      // Update SRS values so the preview intervals reflect the post-failure state
-      if (variables.quality < 3) {
+      if (wasRequeued) {
         setQueue((prev) => {
           const word = prev[currentIndex];
           const { interval, easeFactor } = calculateSrsUpdate(
@@ -99,24 +109,57 @@ export function ReviewView() {
         });
       }
 
-      if (currentIndex + 1 >= queue.length) {
-        // Check if we just added a re-queued word
-        if (variables.quality < 3) {
-          // There's now a re-queued word at the end, continue
-          setCurrentIndex((i) => i + 1);
-          setShowAnswer(false);
-        } else {
-          setSessionComplete(true);
-          queryClient.invalidateQueries({ queryKey: ["reviews-due"] });
-          queryClient.invalidateQueries({ queryKey: ["review-summary"] });
-          queryClient.invalidateQueries({ queryKey: ["user-stats"] });
-        }
+      const atEnd = currentIndex + 1 >= queue.length;
+      const completedSession = atEnd && !wasRequeued;
+
+      if (atEnd && wasRequeued) {
+        setCurrentIndex((i) => i + 1);
+        setShowAnswer(false);
+      } else if (completedSession) {
+        setSessionComplete(true);
+        queryClient.invalidateQueries({ queryKey: ["reviews-due"] });
+        queryClient.invalidateQueries({ queryKey: ["review-summary"] });
+        queryClient.invalidateQueries({ queryKey: ["user-stats"] });
       } else {
         setCurrentIndex((i) => i + 1);
         setShowAnswer(false);
       }
+
+      lastActionRef.current = { wasRequeued, wasCorrect, completedSession };
+      setCanUndo(true);
     },
   });
+
+  const handleUndo = useCallback(() => {
+    const action = lastActionRef.current;
+    if (!action || !canUndo) return;
+
+    if (action.completedSession) {
+      setSessionComplete(false);
+    }
+    if (action.wasCorrect) {
+      setCorrectCount((c) => c - 1);
+    }
+    if (action.wasRequeued) {
+      setQueue((prev) => prev.slice(0, -1));
+    }
+    setCurrentIndex((i) => i - 1);
+    setShowAnswer(false);
+    setCanUndo(false);
+    lastActionRef.current = null;
+  }, [canUndo]);
+
+  // Spacebar to reveal answer
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === "Space" && !showAnswer && !submitMutation.isPending) {
+        e.preventDefault();
+        setShowAnswer(true);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showAnswer, submitMutation.isPending]);
 
   if (isLoading) {
     return (
@@ -158,9 +201,17 @@ export function ReviewView() {
             </p>
           </CardContent>
         </Card>
-        <Button onClick={() => (window.location.href = "/")}>
-          Back to Dashboard
-        </Button>
+        <div className="flex gap-3 justify-center">
+          {canUndo && (
+            <Button variant="outline" onClick={handleUndo}>
+              <Undo2 className="h-4 w-4 mr-2" />
+              Undo Last
+            </Button>
+          )}
+          <Button onClick={() => (window.location.href = "/")}>
+            Back to Dashboard
+          </Button>
+        </div>
       </div>
     );
   }
@@ -179,11 +230,22 @@ export function ReviewView() {
     <div className="max-w-2xl mx-auto space-y-6">
       {/* Progress */}
       <div>
-        <div className="flex justify-between text-sm mb-2">
+        <div className="flex justify-between items-center text-sm mb-2">
           <span>Review Progress</span>
-          <span>
-            {currentIndex + 1} / {queue.length}
-          </span>
+          <div className="flex items-center gap-3">
+            {canUndo && (
+              <button
+                onClick={handleUndo}
+                className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Undo2 className="h-3.5 w-3.5" />
+                <span>Undo</span>
+              </button>
+            )}
+            <span>
+              {currentIndex + 1} / {queue.length}
+            </span>
+          </div>
         </div>
         <Progress value={((currentIndex + 1) / queue.length) * 100} />
       </div>
