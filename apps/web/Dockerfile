@@ -12,8 +12,17 @@ COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY apps/web/package.json ./apps/web/
 COPY packages/shared/package.json ./packages/shared/
 
+# Optional: pass --build-arg NPM_TOKEN=xxx to authenticate with npm registry
+ARG NPM_TOKEN=""
+
 # Install dependencies (cache the pnpm store across builds)
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
+    if [ -n "$NPM_TOKEN" ]; then \
+        echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" >> ~/.npmrc; \
+    fi && \
+    pnpm config set fetching-concurrency 8 --global && \
+    pnpm config set fetch-retries 5 --global && \
+    pnpm config set fetch-retry-mintimeout 10000 --global && \
     pnpm install --frozen-lockfile --filter @monke-say/web...
 
 # Copy source code
