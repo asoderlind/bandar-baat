@@ -1,17 +1,20 @@
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
+
+RUN apk upgrade --no-cache
 
 WORKDIR /app
 
-# Install pnpm
-RUN npm install -g pnpm
+# Enable corepack so the exact pnpm version from packageManager field is used
+RUN corepack enable
 
 # Copy workspace package files
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY apps/web/package.json ./apps/web/
 COPY packages/shared/package.json ./packages/shared/
 
-# Install dependencies
-RUN pnpm install --frozen-lockfile --filter @monke-say/web...
+# Install dependencies (cache the pnpm store across builds)
+RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile --filter @monke-say/web...
 
 # Copy source code
 COPY apps/web ./apps/web
