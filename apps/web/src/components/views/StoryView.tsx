@@ -93,7 +93,10 @@ export function StoryView() {
   // Audio playback state
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
   const [loadingAudio, setLoadingAudio] = useState<string | null>(null);
-  const [speakingRate, setSpeakingRate] = useState(1.0);
+  const [speakingRate, setSpeakingRate] = useState<number>(() => {
+    const saved = localStorage.getItem("review-playback-rate");
+    return saved ? Number(saved) : 1.0;
+  });
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Play audio for a word, sentence, or full text
@@ -118,6 +121,7 @@ export function StoryView() {
           speakingRate: effectiveRate,
         });
         const audio = new Audio(result.audioUrl);
+        audio.playbackRate = effectiveRate;
         audioRef.current = audio;
 
         audio.onplay = () => {
@@ -523,7 +527,11 @@ export function StoryView() {
                 max={2}
                 step={0.25}
                 value={speakingRate}
-                onChange={(e) => setSpeakingRate(Number(e.target.value))}
+                onChange={(e) => {
+                  const rate = Number(e.target.value);
+                  setSpeakingRate(rate);
+                  localStorage.setItem("review-playback-rate", String(rate));
+                }}
                 className="w-20 accent-primary"
               />
               <span className="text-xs font-medium w-8">{speakingRate}×</span>
