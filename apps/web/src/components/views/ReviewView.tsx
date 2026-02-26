@@ -27,6 +27,8 @@ interface LastAction {
   completedSession: boolean;
 }
 
+const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5];
+
 export function ReviewView() {
   const queryClient = useQueryClient();
   const [queue, setQueue] = useState<ReviewWord[]>([]);
@@ -40,6 +42,18 @@ export function ReviewView() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [canUndo, setCanUndo] = useState(false);
   const lastActionRef = useRef<LastAction | null>(null);
+
+  const [playbackRate, setPlaybackRateState] = useState<number>(() => {
+    const saved = localStorage.getItem("review-playback-rate");
+    return saved ? Number(saved) : 1;
+  });
+  const playbackRateRef = useRef(playbackRate);
+  const setPlaybackRate = useCallback((rate: number) => {
+    playbackRateRef.current = rate;
+    setPlaybackRateState(rate);
+    localStorage.setItem("review-playback-rate", String(rate));
+    if (audioRef.current) audioRef.current.playbackRate = rate;
+  }, []);
 
   const { data: reviews, isLoading } = useQuery({
     queryKey: ["reviews-due"],
@@ -62,6 +76,7 @@ export function ReviewView() {
       setAudioUrl(fullUrl);
       if (audioRef.current) {
         audioRef.current.src = fullUrl;
+        audioRef.current.playbackRate = playbackRateRef.current;
         await audioRef.current.play();
       }
     } catch (err) {
@@ -378,10 +393,29 @@ export function ReviewView() {
         </CardContent>
       </Card>
 
-      {/* Stats */}
-      <div className="flex justify-between text-sm text-muted-foreground">
-        <span>Status: {currentReview.status}</span>
-        <span>Familiarity: {Math.round(currentReview.familiarity * 100)}%</span>
+      {/* Stats + Speed control */}
+      <div className="flex justify-between items-center text-sm text-muted-foreground">
+        <div className="flex flex-col gap-0.5">
+          <span>Status: {currentReview.status}</span>
+          <span>Familiarity: {Math.round(currentReview.familiarity * 100)}%</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="text-xs mr-1">Speed</span>
+          {SPEEDS.map((s) => (
+            <button
+              key={s}
+              onClick={() => setPlaybackRate(s)}
+              className={cn(
+                "text-xs px-1.5 py-0.5 rounded transition-colors",
+                playbackRate === s
+                  ? "bg-primary text-primary-foreground"
+                  : "hover:bg-muted",
+              )}
+            >
+              {s}×
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
