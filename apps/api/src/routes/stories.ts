@@ -45,19 +45,43 @@ async function determineUserLevel(
   override?: CEFRLevel,
 ): Promise<CEFRLevel> {
   if (override) return override;
-  const result = await db
-    .select({ count: sql<number>`count(*)` })
+
+  const [row] = await db
+    .select({
+      mastered: sql<number>`count(*) filter (where ${userWords.status} = 'MASTERED')`,
+      known: sql<number>`count(*) filter (where ${userWords.status} = 'KNOWN')`,
+      learning: sql<number>`count(*) filter (where ${userWords.status} = 'LEARNING')`,
+      // Average familiarity only over words the user actually knows/has mastered
+      avgFamiliarity: sql<number>`coalesce(avg(${userWords.familiarity}) filter (where ${userWords.status} in ('KNOWN', 'MASTERED')), 0)`,
+    })
     .from(userWords)
     .where(
       and(
         eq(userWords.userId, userId),
-        inArray(userWords.status, ["KNOWN", "MASTERED"]),
+        inArray(userWords.status, ["LEARNING", "KNOWN", "MASTERED"]),
       ),
     );
-  const wordsKnown = Number(result[0]?.count || 0);
-  if (wordsKnown < 50) return "A1";
-  if (wordsKnown < 150) return "A2";
-  if (wordsKnown < 400) return "B1";
+
+  const mastered = Number(row?.mastered ?? 0);
+  const known = Number(row?.known ?? 0);
+  const learning = Number(row?.learning ?? 0);
+  const avgFamiliarity = Number(row?.avgFamiliarity ?? 0);
+
+  // Weighted vocabulary score: MASTERED > KNOWN > LEARNING
+  const rawScore = mastered * 1.0 + known * 0.6 + learning * 0.15;
+
+  // Scale by retention quality: full familiarity keeps full score,
+  // zero familiarity halves it (0.5 + 0.5 * avgFamiliarity → range 0.5–1.0)
+  const retentionFactor = 0.5 + avgFamiliarity * 0.5;
+  const score = rawScore * retentionFactor;
+
+  // Thresholds calibrated to be more realistic than raw word counts
+  // A1→A2: ~250 mastered at full retention
+  // A2→B1: ~670 mastered at full retention
+  // B1→B2: ~1500 mastered at full retention
+  if (score < 125) return "A1";
+  if (score < 400) return "A2";
+  if (score < 900) return "B1";
   return "B2";
 }
 
